@@ -1,5 +1,78 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-type Subscription={plan_code:string;status:string;created_at:string;updated_at:string};const plans=[{id:"free",name:"Essencial",price:"Grátis",items:["Clientes e veículos","O.S. e orçamentos","Estoque básico"]},{id:"pro",name:"Profissional",price:"Em breve",items:["Financeiro completo","Assistente Gemini","Equipe e relatórios"]},{id:"premium",name:"CR SOS",price:"Em breve",items:["Tudo do Profissional","Chamados de clientes próximos","Prioridade no mapa"]}];
-export function SubscriptionManager({workshopId,isAdmin}:{workshopId:string;isAdmin:boolean}){const db=createClient();const[sub,setSub]=useState<Subscription|null>(null),[notice,setNotice]=useState("");async function load(){const{data}=await db.from("subscriptions").select("plan_code,status,created_at,updated_at").eq("workshop_id",workshopId).maybeSingle();setSub(data as Subscription|null)}useEffect(()=>{load()},[]);async function choose(plan:string){if(plan==="free"){const{error}=await db.from("subscriptions").upsert({workshop_id:workshopId,plan_code:"free",status:"active"},{onConflict:"workshop_id"});setNotice(error?.message||"Plano Essencial ativo.");load();return}setNotice("Este plano foi selecionado. A cobrança será liberada quando conectarmos a InfinitePay.")}return <div><section className="rounded-xl border border-[#4a3818] bg-[#1A1A1A] p-5"><p className="text-sm text-zinc-400">Plano atual</p><h2 className="mt-2 text-2xl font-bold text-[#FFC107]">{plans.find(p=>p.id===sub?.plan_code)?.name||"Essencial"}</h2><p className="mt-2 text-sm text-zinc-400">Status: {sub?.status||"ativo"}</p>{notice&&<p className="mt-3 text-sm text-zinc-200">{notice}</p>}</section><div className="mt-7 grid gap-4 lg:grid-cols-3">{plans.map(plan=><article key={plan.id} className={`rounded-xl border p-5 ${sub?.plan_code===plan.id?"border-[#FFC107] bg-[#211805]":"border-zinc-800 bg-[#171717]"}`}><h2 className="text-xl font-bold">{plan.name}</h2><p className="mt-2 text-2xl font-bold text-[#FFC107]">{plan.price}</p><ul className="mt-5 space-y-2 text-sm text-zinc-300">{plan.items.map(item=><li key={item}>✓ {item}</li>)}</ul>{isAdmin&&<button onClick={()=>choose(plan.id)} className="mt-6 rounded-lg bg-[#FFC107] px-4 py-2 font-bold text-black">{plan.id==="free"?"Usar Essencial":"Selecionar"}</button>}</article>)}</div><p className="mt-6 text-sm text-zinc-500">Pagamentos por Pix e cartão serão processados pela InfinitePay quando a conta for configurada.</p></div>}
+
+type Subscription = {
+  plan_code: string;
+  status: string;
+};
+
+const plans = [
+  { id: "free", name: "Essencial", price: "Grátis", items: ["Clientes e veículos", "O.S. e orçamentos", "Estoque básico"] },
+  { id: "pro", name: "Profissional", price: "R$ 29,90/mês", items: ["Financeiro completo", "Assistente Gemini", "Equipe e relatórios"] },
+  { id: "premium", name: "CR SOS", price: "R$ 45,90/mês", items: ["Tudo do Profissional", "Chamados de clientes próximos", "Prioridade no mapa"] },
+];
+
+export function SubscriptionManager({ workshopId, isAdmin }: { workshopId: string; isAdmin: boolean }) {
+  const db = createClient();
+  const [sub, setSub] = useState<Subscription | null>(null);
+  const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState<string | null>(null);
+
+  async function load() {
+    const { data } = await db.from("subscriptions").select("plan_code,status").eq("workshop_id", workshopId).maybeSingle();
+    setSub(data as Subscription | null);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function choose(plan: string) {
+    setLoading(plan);
+    setNotice("");
+    try {
+      if (plan === "free") {
+        const { error } = await db.from("subscriptions").upsert(
+          { workshop_id: workshopId, plan_code: "free", status: "active" },
+          { onConflict: "workshop_id" },
+        );
+        setNotice(error?.message || "Plano Essencial ativo.");
+        await load();
+        return;
+      }
+
+      const response = await fetch("/api/checkout-assinatura", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Não foi possível gerar o checkout.");
+      window.location.assign(result.checkoutUrl);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Não foi possível iniciar o pagamento.");
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  return <div>
+    <section className="rounded-xl border border-[#4a3818] bg-[#1A1A1A] p-5">
+      <p className="text-sm text-zinc-400">Plano atual</p>
+      <h2 className="mt-2 text-2xl font-bold text-[#FFC107]">{plans.find((plan) => plan.id === sub?.plan_code)?.name || "Essencial"}</h2>
+      <p className="mt-2 text-sm text-zinc-400">Status: {sub?.status || "ativo"}</p>
+      {notice && <p className="mt-3 text-sm text-zinc-200">{notice}</p>}
+    </section>
+    <div className="mt-7 grid gap-4 lg:grid-cols-3">
+      {plans.map((plan) => <article key={plan.id} className={`rounded-xl border p-5 ${sub?.plan_code === plan.id ? "border-[#FFC107] bg-[#211805]" : "border-zinc-800 bg-[#171717]"}`}>
+        <h2 className="text-xl font-bold">{plan.name}</h2>
+        <p className="mt-2 text-2xl font-bold text-[#FFC107]">{plan.price}</p>
+        <ul className="mt-5 space-y-2 text-sm text-zinc-300">{plan.items.map((item) => <li key={item}>✓ {item}</li>)}</ul>
+        {isAdmin && <button disabled={loading !== null} onClick={() => choose(plan.id)} className="mt-6 rounded-lg bg-[#FFC107] px-4 py-2 font-bold text-black disabled:cursor-wait disabled:opacity-60">
+          {loading === plan.id ? "Aguarde…" : plan.id === "free" ? "Usar Essencial" : "Assinar agora"}
+        </button>}
+      </article>)}
+    </div>
+    <p className="mt-6 text-sm text-zinc-500">Pagamentos por Pix e cartão são processados pela InfinitePay.</p>
+  </div>;
+}
