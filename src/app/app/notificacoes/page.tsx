@@ -1,0 +1,5 @@
+import { AppShell } from "@/components/app-shell";
+import { NotificationsManager } from "@/components/notifications-manager";
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+export default async function NotificationsPage() { const db = await createClient(); const { data: { user } } = await db.auth.getUser(); if (!user) redirect("/login"); const { data } = await db.from("workshop_users").select("workshop_id,workshops(name)").eq("user_id", user.id).limit(1).maybeSingle(); if (!data) redirect("/app"); const workshop = data.workshops as unknown as { name: string }; return <AppShell workshop={workshop.name}><p className="text-xs font-bold tracking-[.2em] text-[#FFC107]">CENTRAL DE AVISOS</p><h1 className="mt-2 text-3xl font-bold">Notificações</h1><p className="mt-2 text-zinc-400">Acompanhe lembretes e atualizações importantes da oficina.</p><div className="mt-7"><NotificationsManager workshopId={data.workshop_id} userId={user.id} /></div></AppShell>; }
