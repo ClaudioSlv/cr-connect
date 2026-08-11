@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Subscription = {
@@ -16,6 +17,7 @@ const plans = [
 
 export function SubscriptionManager({ workshopId, isAdmin }: { workshopId: string; isAdmin: boolean }) {
   const db = createClient();
+  const searchParams = useSearchParams();
   const [sub, setSub] = useState<Subscription | null>(null);
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState<string | null>(null);
@@ -25,7 +27,10 @@ export function SubscriptionManager({ workshopId, isAdmin }: { workshopId: strin
     setSub(data as Subscription | null);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    if (searchParams.get("checkout")) setNotice("Pagamento recebido. Estamos confirmando seu plano.");
+  }, []);
 
   async function choose(plan: string) {
     setLoading(plan);

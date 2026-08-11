@@ -33,6 +33,7 @@ export async function POST(request: Request) {
       items: [{ quantity: 1, price: plans[planCode].price, description: plans[planCode].name }],
       order_nsu: orderNsu,
       redirect_url: `${origin}/app/assinatura?checkout=${encodeURIComponent(orderNsu)}`,
+      webhook_url: `${origin}/api/webhooks/infinitepay`,
     }),
   });
   const response = await payment.json().catch(() => null) as Record<string, unknown> | null;
