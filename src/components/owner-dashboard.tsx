@@ -12,9 +12,27 @@ type Vehicle = {
   color: string | null;
 };
 
+type SosRequest = {
+  id: string;
+  requester_name: string;
+  service_type: string;
+  status: "requested" | "accepted" | "declined" | "cancelled" | "completed";
+  created_at: string;
+  workshops: { name: string } | null;
+};
+
+const sosStatus: Record<SosRequest["status"], string> = {
+  requested: "Aguardando resposta",
+  accepted: "Aceito pela oficina",
+  declined: "Recusado",
+  cancelled: "Cancelado",
+  completed: "Atendimento concluído",
+};
+
 export function OwnerDashboard({ name }: { name: string }) {
   const db = createClient();
   const [items, setItems] = useState<Vehicle[]>([]);
+  const [requests, setRequests] = useState<SosRequest[]>([]);
   const [model, setModel] = useState("");
   const [plate, setPlate] = useState("");
   const [brand, setBrand] = useState("");
@@ -23,12 +41,13 @@ export function OwnerDashboard({ name }: { name: string }) {
   const [saving, setSaving] = useState(false);
 
   async function load() {
-    const { data, error } = await db
-      .from("owner_vehicles")
-      .select("id,plate,brand,model,year,color")
-      .order("created_at", { ascending: false });
-    if (error) setNotice(error.message);
-    else setItems((data || []) as Vehicle[]);
+    const [vehiclesResult, requestsResult] = await Promise.all([
+      db.from("owner_vehicles").select("id,plate,brand,model,year,color").order("created_at", { ascending: false }),
+      db.from("sos_requests").select("id,requester_name,service_type,status,created_at,workshops(name)").order("created_at", { ascending: false }).limit(5),
+    ]);
+    if (vehiclesResult.error) setNotice(vehiclesResult.error.message);
+    else setItems((vehiclesResult.data || []) as Vehicle[]);
+    if (!requestsResult.error) setRequests((requestsResult.data || []) as unknown as SosRequest[]);
   }
 
   useEffect(() => {
@@ -127,6 +146,29 @@ export function OwnerDashboard({ name }: { name: string }) {
             </div>
           </section>
         </div>
+
+        <section className="mt-8">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2 className="text-xl font-bold">Meus chamados CR SOS</h2>
+              <p className="mt-1 text-sm text-zinc-400">Os últimos pedidos feitos enquanto você estava conectado.</p>
+            </div>
+            <a href="/sos" className="text-sm font-semibold text-[#FFC107]">Novo chamado</a>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {requests.length === 0 && <p className="rounded-xl border border-zinc-800 bg-[#171717] p-5 text-zinc-400">Você ainda não fez nenhum chamado CR SOS.</p>}
+            {requests.map((request) => (
+              <article key={request.id} className="rounded-xl border border-zinc-800 bg-[#171717] p-5">
+                <p className="font-bold">{request.workshops?.name || "Oficina CR SOS"}</p>
+                <p className="mt-1 text-sm text-zinc-300">{request.service_type}</p>
+                <div className="mt-3 flex flex-wrap justify-between gap-2 text-sm">
+                  <span className="font-semibold text-[#FFC107]">{sosStatus[request.status]}</span>
+                  <span className="text-zinc-500">{new Date(request.created_at).toLocaleDateString("pt-BR")}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
       </div>
     </main>
   );
