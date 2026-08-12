@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 
 type AppNotification = {
   id: string;
+  sos_request_id: string | null;
   title: string;
   body: string | null;
   read_at: string | null;
@@ -21,7 +22,7 @@ export function NotificationsManager({ workshopId, userId }: { workshopId: strin
   async function load() {
     const { data } = await db
       .from("notifications")
-      .select("id,title,body,read_at,created_at")
+      .select("id,sos_request_id,title,body,read_at,created_at")
       .eq("workshop_id", workshopId)
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
@@ -54,7 +55,9 @@ export function NotificationsManager({ workshopId, userId }: { workshopId: strin
   }
 
   async function markRead(id: string) {
+    const item = items.find((entry) => entry.id === id);
     await db.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", id);
+    if (item?.sos_request_id) await db.rpc("acknowledge_sos_request", { p_request_id: item.sos_request_id });
     await load();
   }
 

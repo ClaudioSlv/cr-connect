@@ -1,15 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-type Request = { id: string; requester_name: string; requester_phone: string | null; service_type: string; description: string | null; status: string; created_at: string; feedback_rating: number | null; feedback_text: string | null; feedback_at: string | null };
+type Request = { id: string; requester_name: string; requester_phone: string | null; service_type: string; description: string | null; status: string; created_at: string; viewed_at: string | null; feedback_rating: number | null; feedback_text: string | null; feedback_at: string | null };
 const labels: Record<string, string> = { requested: "Aguardando resposta", accepted: "Aceito", declined: "Recusado", cancelled: "Cancelado", completed: "Concluído" };
 
 export function SosRequests({ initial }: { initial: Request[] }) {
   const db = createClient();
   const [items, setItems] = useState(initial);
   const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    initial.filter((item) => !item.viewed_at && item.status === "requested").forEach((item) => void db.rpc("acknowledge_sos_request", { p_request_id: item.id }));
+  }, []);
 
   async function update(id: string, status: "accepted" | "declined" | "completed") {
     const { error } = await db.from("sos_requests").update({ status }).eq("id", id);
