@@ -20,11 +20,21 @@ export default function LoginPage() {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
+    setNotice("");
     const { error } = await createClient().auth.signInWithOtp({
       email,
       options: { emailRedirectTo: `${location.origin}/auth/callback` },
     });
-    setNotice(error ? "Não foi possível enviar o e-mail agora. Aguarde e tente novamente." : "Verifique seu e-mail para continuar.");
+    if (error) {
+      const detail = error.message.toLowerCase();
+      setNotice(
+        detail.includes("rate") || detail.includes("limit")
+          ? "Muitos links de acesso foram solicitados agora. Aguarde alguns minutos antes de tentar novamente."
+          : "O e-mail de acesso não pôde ser enviado agora. Tente novamente em alguns minutos ou fale com a oficina.",
+      );
+    } else {
+      setNotice("Link enviado. Abra seu e-mail e toque em “Confirmar acesso” para continuar.");
+    }
     setBusy(false);
   }
 
