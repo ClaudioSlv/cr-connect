@@ -8,8 +8,8 @@ type Subscription = { plan_code: string; status: string };
 
 const plans = [
   { id: "free", name: "Essencial", price: "Grátis", items: ["Clientes e veículos", "O.S. e orçamentos", "Estoque básico"] },
-  { id: "pro", name: "Profissional", price: "R$ 29,90/mês", items: ["Financeiro completo", "Assistente Gemini", "Equipe e relatórios"] },
-  { id: "premium", name: "CR SOS", price: "R$ 45,90/mês", items: ["Tudo do Profissional", "Chamados de clientes próximos", "Prioridade no mapa"] },
+  { id: "pro", name: "Profissional", price: "R$ 29,90", items: ["Financeiro completo", "Assistente Gemini", "Equipe e relatórios"] },
+  { id: "premium", name: "CR SOS", price: "R$ 44,90", items: ["Tudo do Profissional", "Chamados de clientes próximos", "Prioridade no mapa"] },
 ];
 
 export function SubscriptionManager({ workshopId, isAdmin }: { workshopId: string; isAdmin: boolean }) {

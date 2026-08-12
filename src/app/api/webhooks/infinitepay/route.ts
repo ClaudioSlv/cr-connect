@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-const expectedAmounts = { pro: 2990, premium: 4590 } as const;
+const expectedAmounts = { pro: 2990, premium: 4490 } as const;
 
 type WebhookPayload = {
   invoice_slug?: string;

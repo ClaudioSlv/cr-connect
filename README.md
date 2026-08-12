@@ -22,11 +22,11 @@ Ainda não foram criados módulos de clientes, veículos, O.S., orçamento ou es
 
 ## Pagamentos dos planos
 
-O checkout dos planos Profissional (R$ 29,90) e CR SOS (R$ 45,90) usa a InfinitePay. Antes de publicar, configure `INFINITEPAY_HANDLE` nas variáveis de ambiente da Vercel com a sua InfiniteTag, sem o caractere `$` (por exemplo, `cr_connect`).
+O checkout dos planos Profissional (R$ 29,90) e CR SOS (R$ 44,90) usa a InfinitePay. Antes de publicar, configure `INFINITEPAY_HANDLE` nas variáveis de ambiente da Vercel com a sua InfiniteTag, sem o caractere `$` (por exemplo, `cr_connect`).
 
 No App InfinitePay, habilite **Vendas > Checkout > Configurações > Habilitar Checkout Integrado**. O CR Connect cria o link de pagamento, recebe a confirmação pelo webhook e só então ativa o plano da oficina.
 
-Os preços do checkout integrado são cobranças avulsas. Para cobrança automática mensal, crie também os planos recorrentes diretamente em **Vendas > Planos e recorrência** na InfinitePay; ela envia os lembretes e as próximas cobranças automaticamente.
+Os pagamentos são cobranças únicas: o CR Connect não cria recorrência automática na InfinitePay.
 
 ## Publicação no GitHub
 

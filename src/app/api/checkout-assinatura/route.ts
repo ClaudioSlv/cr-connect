@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 const plans = {
   pro: { name: "Plano Profissional CR Connect", price: 2990 },
-  premium: { name: "Plano CR SOS", price: 4590 },
+  premium: { name: "Plano CR SOS", price: 4490 },
 } as const;
 
 type PlanCode = keyof typeof plans;
