@@ -20,6 +20,14 @@ Ainda não foram criados módulos de clientes, veículos, O.S., orçamento ou es
 4. Aplique `supabase/migrations/202608100001_initial_foundation.sql` no SQL Editor ou com a CLI do Supabase.
 5. No Supabase, inclua `http://localhost:3000/auth/callback` em Authentication > URL Configuration.
 
+## Pagamentos dos planos
+
+O checkout dos planos Profissional (R$ 29,90) e CR SOS (R$ 45,90) usa a InfinitePay. Antes de publicar, configure `INFINITEPAY_HANDLE` nas variáveis de ambiente da Vercel com a sua InfiniteTag, sem o caractere `$` (por exemplo, `cr_connect`).
+
+No App InfinitePay, habilite **Vendas > Checkout > Configurações > Habilitar Checkout Integrado**. O CR Connect cria o link de pagamento, recebe a confirmação pelo webhook e só então ativa o plano da oficina.
+
+Os preços do checkout integrado são cobranças avulsas. Para cobrança automática mensal, crie também os planos recorrentes diretamente em **Vendas > Planos e recorrência** na InfinitePay; ela envia os lembretes e as próximas cobranças automaticamente.
+
 ## Publicação no GitHub
 
 O Git local é iniciado neste diretório. Crie um repositório vazio no GitHub e rode:
