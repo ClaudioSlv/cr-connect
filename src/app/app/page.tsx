@@ -26,9 +26,9 @@ export default async function AppHome() {
   if (!workshop) return <main className="grid min-h-screen place-items-center p-6"><OnboardingForm /></main>;
 
   return <AppShell workshop={workshop.name}>
-    <p className="text-xs font-bold tracking-[.2em] text-[#FFC107]">VISÃO GERAL</p>
-    <h1 className="mt-3 text-3xl font-bold">Olá, {workshop.name}</h1>
-    <p className="mt-2 text-zinc-400">Selecione um módulo para começar.</p>
-    <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{shortcuts.map((item) => <Link href={item.href} key={item.href} className="rounded-xl border border-zinc-800 bg-[#1A1A1A] p-5 transition hover:border-[#FFC107] hover:bg-[#211805]"><h2 className="font-semibold">{item.title}</h2><p className="mt-2 text-sm text-zinc-400">{item.description}</p><span className="mt-4 block text-sm font-semibold text-[#FFC107]">Abrir →</span></Link>)}</div>
+    <p className="text-sm font-bold tracking-[.2em] text-[#FFC107] md:text-xs">VISÃO GERAL</p>
+    <h1 className="mt-3 text-4xl font-bold md:text-3xl">Olá, {workshop.name}</h1>
+    <p className="mt-2 text-lg text-zinc-400 md:text-base">Selecione um módulo para começar.</p>
+    <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{shortcuts.map((item) => <Link href={item.href} key={item.href} className="rounded-xl border border-zinc-800 bg-[#1A1A1A] p-5 transition hover:border-[#FFC107] hover:bg-[#211805]"><h2 className="text-xl font-semibold md:text-base">{item.title}</h2><p className="mt-2 text-base text-zinc-400 md:text-sm">{item.description}</p><span className="mt-4 block text-base font-semibold text-[#FFC107] md:text-sm">Abrir →</span></Link>)}</div>
   </AppShell>;
 }
