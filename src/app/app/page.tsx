@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { OnboardingForm } from "@/components/onboarding-form";
 import { OwnerDashboard } from "@/components/owner-dashboard";
+import { OwnerSosNotificationListener } from "@/components/owner-sos-notification-listener";
 import { createClient } from "@/lib/supabase/server";
 
 const shortcuts = [
@@ -22,7 +23,7 @@ export default async function AppHome() {
     db.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
   ]);
   const workshop = membership?.workshops as unknown as { name: string } | null;
-  if (!workshop && owner) return <OwnerDashboard name={profile?.full_name || ""} />;
+  if (!workshop && owner) return <><OwnerSosNotificationListener /><OwnerDashboard name={profile?.full_name || ""} /></>;
   if (!workshop) return <main className="grid min-h-screen place-items-center p-6"><OnboardingForm /></main>;
 
   return <AppShell workshop={workshop.name}>
