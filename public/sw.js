@@ -1,8 +1,2 @@
-const CACHE = "cr-connect-shell-v2";
-
-self.addEventListener("install", () => self.skipWaiting());
-
-self.addEventListener("activate", (event) => {
-  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key)))));
-  self.clients.claim();
-});
+self.addEventListener("push", (event) => { const data = event.data ? event.data.json() : {}; event.waitUntil(self.registration.showNotification(data.title || "CR Connect", { body: data.body || "Nova atualizacao", icon: "/brand/cr-reparador.jpg", data: { url: data.url || "/app" }, vibrate: [200, 100, 200] })); });
+self.addEventListener("notificationclick", (event) => { event.notification.close(); event.waitUntil(clients.openWindow(event.notification.data.url)); });

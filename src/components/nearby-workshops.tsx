@@ -72,6 +72,7 @@ export function NearbyWorkshops() {
     const result = await db.rpc("create_sos_request", { p_workshop_id: selected.id, p_requester_name: name, p_requester_phone: phone, p_service_type: service, p_description: description, p_latitude: position.latitude, p_longitude: position.longitude });
     setLoading(false);
     if (result.error) { setMessage("Nao foi possivel enviar seu chamado. Tente novamente."); return; }
+    void fetch("/api/push-sos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requestId: result.data, event: "request" }) });
     setSent({ workshop: selected, requestId: result.data as string }); setViewed(false); setStatus("requested"); setNotice(""); lastStatus.current = "requested";
     setMessage("Chamado enviado para " + selected.name + ". A oficina foi avisada."); setSelected(null); setName(""); setPhone(""); setService(""); setDescription("");
   }

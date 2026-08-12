@@ -18,6 +18,7 @@ export function SosRequests({ initial }: { initial: Request[] }) {
   async function update(id: string, status: "accepted" | "declined" | "completed") {
     const { error } = await db.from("sos_requests").update({ status }).eq("id", id);
     if (error) { setNotice(error.message); return; }
+    void fetch("/api/push-sos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requestId: id, event: "status" }) });
     setItems((current) => current.map((item) => item.id === id ? { ...item, status } : item));
     setNotice(status === "completed" ? "Atendimento concluído. O cliente já pode avaliar a oficina." : "Chamado atualizado.");
   }

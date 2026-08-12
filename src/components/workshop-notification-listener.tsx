@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { PushNotificationSetup } from "@/components/push-notification-setup";
 
 type AppNotification = { id: string; workshop_id: string; title: string; body: string | null; created_at: string };
 
@@ -74,5 +75,5 @@ export function WorkshopNotificationListener() {
     if (ok) play();
   }
 
-  return <>{!alertsArmed && <button type="button" onClick={() => void enableAlerts()} className="fixed bottom-5 right-5 z-40 rounded-xl border border-[#FFC107] bg-[#171717] px-4 py-3 text-sm font-bold text-[#FFC107] shadow-xl">Ativar avisos CR SOS com som</button>}{toast && <div role="alert" className="fixed left-4 right-4 top-4 z-50 mx-auto max-w-md rounded-2xl border border-[#FFC107] bg-[#211805] p-4 shadow-2xl"><p className="font-bold text-[#FFC107]">{toast.title}</p><p className="mt-1 text-sm text-zinc-100">{toast.body || "Há uma atualização no CR Connect."}</p><p className="mt-2 text-xs text-zinc-400">Abra Notificações para ver os detalhes.</p></div>}</>;
+  return <><PushNotificationSetup />{!alertsArmed && <button type="button" onClick={() => void enableAlerts()} className="fixed bottom-5 right-5 z-40 rounded-xl border border-[#FFC107] bg-[#171717] px-4 py-3 text-sm font-bold text-[#FFC107] shadow-xl">Ativar avisos CR SOS com som</button>}{toast && <div role="alert" className="fixed left-4 right-4 top-4 z-50 mx-auto max-w-md rounded-2xl border border-[#FFC107] bg-[#211805] p-4 shadow-2xl"><p className="font-bold text-[#FFC107]">{toast.title}</p><p className="mt-1 text-sm text-zinc-100">{toast.body || "Há uma atualização no CR Connect."}</p><p className="mt-2 text-xs text-zinc-400">Abra Notificações para ver os detalhes.</p></div>}</>;
 }
