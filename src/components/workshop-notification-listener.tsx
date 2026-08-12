@@ -34,7 +34,7 @@ export function WorkshopNotificationListener() {
   const db = createClient();
   const knownIds = useRef<Set<string> | null>(null);
   const workshopId = useRef<string | null>(null);
-  const [alertsArmed, setAlertsArmed] = useState(false);
+  const [alertsArmed, setAlertsArmed] = useState(() => typeof window !== "undefined" && window.localStorage.getItem("cr-connect-sound-consent") === "true");
   const [toast, setToast] = useState<AppNotification | null>(null);
   const { arm, play } = useAlertSound();
 
@@ -71,6 +71,7 @@ export function WorkshopNotificationListener() {
 
   async function enableAlerts() {
     const ok = await arm(); setAlertsArmed(ok);
+    if (ok) window.localStorage.setItem("cr-connect-sound-consent", "true");
     if ("Notification" in window && Notification.permission === "default") await Notification.requestPermission();
     if (ok) play();
   }

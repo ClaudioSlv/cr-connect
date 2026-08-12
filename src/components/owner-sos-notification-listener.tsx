@@ -33,7 +33,7 @@ function useAlertSound() {
 export function OwnerSosNotificationListener() {
   const db = createClient();
   const known = useRef<Set<string> | null>(null);
-  const [armed, setArmed] = useState(false);
+  const [armed, setArmed] = useState(() => typeof window !== "undefined" && window.localStorage.getItem("cr-connect-sound-consent") === "true");
   const [toast, setToast] = useState<OwnerAlert | null>(null);
   const { arm, play } = useAlertSound();
   function announce(item: OwnerAlert) {
@@ -56,6 +56,7 @@ export function OwnerSosNotificationListener() {
   }, [armed]);
   async function activate() {
     const ok = await arm(); setArmed(ok);
+    if (ok) window.localStorage.setItem("cr-connect-sound-consent", "true");
     if ("Notification" in window && Notification.permission === "default") await Notification.requestPermission();
     if (ok) play();
   }
