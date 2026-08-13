@@ -1,2 +1,14 @@
-import { AppShell } from "@/components/app-shell";import { FinanceManager } from "@/components/finance-manager";import { createClient } from "@/lib/supabase/server";import { redirect } from "next/navigation";
-export default async function FinancePage(){const db=await createClient();const{data:{user}}=await db.auth.getUser();if(!user)redirect("/login");const{data}=await db.from("workshop_users").select("workshop_id,workshops(name)").eq("user_id",user.id).limit(1).maybeSingle();if(!data)redirect("/app");const workshop=data.workshops as unknown as{name:string};return <AppShell workshop={workshop.name}><p className="text-xs font-bold tracking-[.2em] text-[#FFC107]">GESTÃO FINANCEIRA</p><h1 className="mt-2 text-3xl font-bold">Financeiro</h1><p className="mt-2 text-zinc-400">Controle entradas, despesas e valores pendentes da oficina.</p><div className="mt-7"><FinanceManager workshopId={data.workshop_id}/></div></AppShell>}
+import { AppShell } from "@/components/app-shell";
+import { FinanceManager } from "@/components/finance-manager";
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+
+export default async function FinancePage() {
+  const db = await createClient();
+  const { data: { user } } = await db.auth.getUser();
+  if (!user) redirect("/login");
+  const { data } = await db.from("workshop_users").select("workshop_id,role,workshops(name)").eq("user_id", user.id).limit(1).maybeSingle();
+  if (!data || !["admin", "attendant"].includes(data.role)) redirect("/app");
+  const workshop = data.workshops as unknown as { name: string };
+  return <AppShell workshop={workshop.name}><p className="text-xs font-bold tracking-[.2em] text-[#FFC107]">GESTÃO FINANCEIRA</p><h1 className="mt-2 text-3xl font-bold">Financeiro</h1><p className="mt-2 text-zinc-400">Controle entradas, despesas e valores pendentes da oficina.</p><div className="mt-7"><FinanceManager workshopId={data.workshop_id} /></div></AppShell>;
+}
