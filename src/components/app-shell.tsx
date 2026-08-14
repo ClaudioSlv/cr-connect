@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ReturnAfterSave } from "@/components/return-after-save";
 import { WorkshopNotificationListener } from "@/components/workshop-notification-listener";
 
-const items = [["Visão geral", "/app"], ["Clientes", "/app/clientes"], ["Veículos", "/app/veiculos"], ["Ordens de serviço", "/app/ordens"], ["Orçamentos", "/app/orcamentos"], ["Estoque", "/app/estoque"], ["Financeiro", "/app/financeiro"], ["Diagnóstico", "/app/diagnostico"], ["Assistente IA", "/app/assistente"], ["Biblioteca técnica", "/app/biblioteca"], ["Chat", "/app/chat"], ["Notificações", "/app/notificacoes"], ["CR SOS", "/app/cr-sos"], ["Equipe", "/app/equipe"], ["Assinatura", "/app/assinatura"], ["Relatórios", "/app/relatorios"], ["Configurações", "/app/configuracoes"]];
+const items = [["Visão geral", "/app"], ["Clientes", "/app/clientes"], ["Veículos", "/app/veiculos"], ["Ordens de serviço", "/app/ordens"], ["Orçamentos", "/app/orcamentos"], ["Termos", "/app/termos"], ["Estoque", "/app/estoque"], ["Financeiro", "/app/financeiro"], ["Diagnóstico", "/app/diagnostico"], ["Assistente IA", "/app/assistente"], ["Biblioteca técnica", "/app/biblioteca"], ["Chat", "/app/chat"], ["Notificações", "/app/notificacoes"], ["CR SOS", "/app/cr-sos"], ["Equipe", "/app/equipe"], ["Assinatura", "/app/assinatura"], ["Relatórios", "/app/relatorios"], ["Configurações", "/app/configuracoes"]];
 
 function Navigation() { return <nav className="grid grid-cols-2 gap-1 md:grid-cols-1">{items.map(([label, href]) => <Link key={href} href={href} className="rounded-lg px-3 py-2 text-base text-zinc-300 transition hover:bg-[#261e0b] hover:text-[#FFC107] md:text-sm">{label}</Link>)}</nav>; }
 
