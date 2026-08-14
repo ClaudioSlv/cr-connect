@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 
-const savedMessage = /cliente salvo|veículo salvo|o\.s\. salva|produto salvo|movimentação salva|lançamento salvo|procedimento salvo|dtc salvo|configurações salvas|oficina atualizada|cr sos atualizado|chamado atualizado|equipe atualizada/i;
+// Ordens de Serviço ficam na própria tela após salvar, para permitir novos ajustes.
+const savedMessage = /cliente salvo|veículo salvo|produto salvo|movimentação salva|lançamento salvo|procedimento salvo|dtc salvo|configurações salvas|oficina atualizada|cr sos atualizado|chamado atualizado|equipe atualizada/i;
 
 export function ReturnAfterSave() {
   useEffect(() => {
