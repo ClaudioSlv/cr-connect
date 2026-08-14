@@ -57,14 +57,24 @@ export function NearbyWorkshops() {
 
   function locate() {
     if (!navigator.geolocation) { setMessage("Seu navegador nao oferece GPS."); return; }
-    setLoading(true);
+    setLoading(true); setMessage("Localizando você e buscando oficinas…");
+    let finished = false;
+    const finish = (text: string) => { if (finished) return; finished = true; setMessage(text); setLoading(false); };
+    const timeout = window.setTimeout(() => finish("A busca demorou mais que o normal. Confira a internet e tente novamente."), 16000);
     navigator.geolocation.getCurrentPosition(async (result) => {
-      const current = { latitude: result.coords.latitude, longitude: result.coords.longitude };
-      const resultWorkshops = await db.rpc("get_active_sos_workshops");
-      if (resultWorkshops.error) { setMessage("Nao foi possivel buscar oficinas agora."); setLoading(false); return; }
-      const list = ((resultWorkshops.data || []) as Workshop[]).map((item) => ({ ...item, distance: distance(current.latitude, current.longitude, Number(item.latitude), Number(item.longitude)) })).filter((item) => (item.distance || 0) <= item.emergency_radius_km).sort((a, b) => (a.distance || 0) - (b.distance || 0));
-      setPosition(current); setItems(list); setMessage(list.length ? "Oficinas encontradas perto de voce. Toque no marcador dourado para escolher." : "Nenhuma oficina CR SOS ativa no seu raio agora."); setLoading(false);
-    }, () => { setMessage("Permita a localizacao para usar o CR SOS."); setLoading(false); }, { enableHighAccuracy: true, timeout: 10000 });
+      try {
+        const current = { latitude: result.coords.latitude, longitude: result.coords.longitude };
+        const resultWorkshops = await Promise.race([
+          db.rpc("get_active_sos_workshops"),
+          new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("timeout")), 10000)),
+        ]);
+        if (finished) return;
+        if (resultWorkshops.error) { finish("Não foi possível buscar oficinas agora. Tente novamente."); return; }
+        const list = ((resultWorkshops.data || []) as Workshop[]).map((item) => ({ ...item, distance: distance(current.latitude, current.longitude, Number(item.latitude), Number(item.longitude)) })).filter((item) => (item.distance || 0) <= item.emergency_radius_km).sort((a, b) => (a.distance || 0) - (b.distance || 0));
+        setPosition(current); setItems(list); finish(list.length ? "Oficinas encontradas perto de você. Toque no marcador dourado para escolher." : "Nenhuma oficina CR SOS ativa no seu raio agora.");
+      } catch { finish("Não foi possível concluir a busca agora. Confira a internet e tente novamente."); }
+      finally { window.clearTimeout(timeout); }
+    }, () => { window.clearTimeout(timeout); finish("Permita a localização para usar o CR SOS."); }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
   }
 
   async function requestHelp(event: FormEvent) {
