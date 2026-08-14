@@ -28,6 +28,7 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
   const [diagnosis, setDiagnosis] = useState("");
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
 
   async function load() {
     const [clientResult, vehicleResult, orderResult] = await Promise.all([
@@ -45,8 +46,12 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
 
   async function save(event: FormEvent) {
     event.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setMessage("Aguarde, salvando a O.S…");
     const payload = { workshop_id: workshopId, client_id: client, vehicle_id: vehicle, status, customer_complaint: complaint, diagnosis: diagnosis || null, notes: note || null };
     const result = selected ? await db.from("service_orders").update(payload).eq("id", selected.id) : await db.from("service_orders").insert(payload);
+    setSaving(false);
     setMessage(result.error?.message || "O.S. salva. Você continua nesta tela para fazer outras alterações.");
     if (!result.error) await load();
   }
@@ -71,7 +76,7 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
     <form ref={formRef} onSubmit={save} className="rounded-xl border border-zinc-800 bg-[#1A1A1A] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">{selected ? `Editando O.S. #${selected.number}` : "Nova O.S."}</h2>{selected && <PrintDocument type="Ordem de Serviço" number={`#${selected.number}`} client={selected.clients?.full_name || "Cliente"} vehicle={`${selected.vehicles?.brand || ""} ${selected.vehicles?.model || ""} ${selected.vehicles?.plate || ""}`} status={states.find((item) => item[0] === status)?.[1] || status} note={note || complaint} items={orderItems} />}</div>
       <div className="mt-4 grid gap-3"><select required className="field" value={client} onChange={(event) => { setClient(event.target.value); setVehicle(""); }}><option value="">Cliente *</option>{clients.map((item) => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select><select required className="field" disabled={!client} value={vehicle} onChange={(event) => setVehicle(event.target.value)}><option value="">Veículo *</option>{allowed.map((item) => <option key={item.id} value={item.id}>{item.brand} {item.model} {item.plate ? `(${item.plate})` : ""}</option>)}</select><select className="field" value={status} onChange={(event) => setStatus(event.target.value)}>{states.map((item) => <option key={item[0]} value={item[0]}>{item[1]}</option>)}</select><textarea required className="field min-h-24" placeholder="Reclamação do cliente" value={complaint} onChange={(event) => setComplaint(event.target.value)} /><textarea className="field" placeholder="Diagnóstico" value={diagnosis} onChange={(event) => setDiagnosis(event.target.value)} /><textarea className="field" placeholder="Observações" value={note} onChange={(event) => setNote(event.target.value)} /></div>
-      <div className="mt-4 flex flex-wrap gap-3"><button className="rounded-lg bg-[#FFC107] px-4 py-2 font-bold text-black">Salvar O.S.</button><a href="/app" className="rounded-lg border border-zinc-600 px-4 py-2 font-bold text-zinc-100">Voltar ao menu</a></div>
+      <div className="mt-4 flex flex-wrap gap-3"><button disabled={saving} className="rounded-lg bg-[#FFC107] px-4 py-2 font-bold text-black disabled:cursor-wait disabled:opacity-60">{saving ? "Salvando…" : "Salvar O.S."}</button><a href="/app" className="rounded-lg border border-zinc-600 px-4 py-2 font-bold text-zinc-100">Voltar ao menu</a></div>
       {message && <p className="mt-3 text-sm text-[#FFC107]">{message}</p>}
       {selected && <><OrderItemsPanel workshopId={workshopId} orderId={selected.id} status={status} /><AttachmentsManager workshopId={workshopId} orderId={selected.id} /></>}
     </form>
