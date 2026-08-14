@@ -4,6 +4,7 @@ import { OnboardingForm } from "@/components/onboarding-form";
 import { OwnerDashboard } from "@/components/owner-dashboard";
 import { OwnerSosNotificationListener } from "@/components/owner-sos-notification-listener";
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 
 const shortcuts = [
   { title: "Clientes", description: "Ver e cadastrar clientes", href: "/app/clientes" },
@@ -15,7 +16,7 @@ const shortcuts = [
 export default async function AppHome() {
   const db = await createClient();
   const { data: { user } } = await db.auth.getUser();
-  if (!user) return <main className="grid min-h-screen place-items-center p-6"><OnboardingForm /></main>;
+  if (!user) redirect("/login");
   await db.rpc("claim_team_invites");
   const [{ data: membership }, { data: owner }, { data: profile }] = await Promise.all([
     db.from("workshop_users").select("workshops(name)").eq("user_id", user.id).limit(1).maybeSingle(),
