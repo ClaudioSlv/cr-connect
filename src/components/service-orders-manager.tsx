@@ -50,10 +50,16 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
     setSaving(true);
     setMessage("Aguarde, salvando a O.S…");
     const payload = { workshop_id: workshopId, client_id: client, vehicle_id: vehicle, status, customer_complaint: complaint, diagnosis: diagnosis || null, notes: note || null };
-    const result = selected ? await db.from("service_orders").update(payload).eq("id", selected.id) : await db.from("service_orders").insert(payload);
+    const selection = "id,number,client_id,vehicle_id,status,customer_complaint,diagnosis,notes,clients(id,full_name),vehicles(id,client_id,brand,model,plate)";
+    const result = selected
+      ? await db.from("service_orders").update(payload).eq("id", selected.id).select(selection).single()
+      : await db.from("service_orders").insert(payload).select(selection).single();
     setSaving(false);
-    setMessage(result.error?.message || "O.S. salva. Você continua nesta tela para fazer outras alterações.");
-    if (!result.error) await load();
+    if (result.error) { setMessage(result.error.message); return; }
+    const savedOrder = result.data as unknown as Order;
+    setSelected(savedOrder);
+    setMessage(`O.S. #${savedOrder.number} salva. Use “Gerar PDF” para baixar ou compartilhar com o cliente.`);
+    await load();
   }
 
   async function edit(order: Order) {
