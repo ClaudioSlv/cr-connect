@@ -15,23 +15,30 @@ export default function AuthCallbackPage() {
       const params = new URLSearchParams(window.location.search);
       const callbackError = params.get("error_description") || params.get("error");
       if (callbackError) {
-        if (active) setError("Este link de acesso não é mais válido. Volte e solicite apenas um novo link.");
+        if (active) setError("Este link de acesso não é mais válido. Volte e solicite somente um novo link.");
         return;
       }
 
-      // Em alguns celulares o Supabase recebe um código na URL e não conclui a
-      // troca imediatamente. Fazemos a troca aqui e aguardamos a sessão antes
-      // de abrir o painel, evitando que o usuário fique no ciclo de e-mails.
+      // O Supabase pode devolver o acesso por código (PKCE) ou por token_hash,
+      // dependendo do aparelho e do modelo de e-mail configurado.
       const code = params.get("code");
+      const tokenHash = params.get("token_hash");
       if (code) {
         const { error: exchangeError } = await db.auth.exchangeCodeForSession(code);
         if (exchangeError) {
           if (active) setError("Não foi possível validar este link. Solicite um novo link e abra somente o mais recente.");
           return;
         }
+      } else if (tokenHash) {
+        const { error: verifyError } = await db.auth.verifyOtp({ token_hash: tokenHash, type: params.get("type") || "email" });
+        if (verifyError) {
+          if (active) setError("Não foi possível validar este link. Solicite um novo link e abra somente o mais recente.");
+          return;
+        }
       }
 
-      for (let attempt = 0; attempt < 12; attempt += 1) {
+      // Em alguns celulares a gravação da sessão leva alguns instantes.
+      for (let attempt = 0; attempt < 15; attempt += 1) {
         const { data, error: sessionError } = await db.auth.getSession();
         if (!sessionError && data.session) {
           window.location.replace("/app");
