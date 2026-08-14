@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { OnboardingForm } from "@/components/onboarding-form";
 import { OwnerDashboard } from "@/components/owner-dashboard";
 import { OwnerSosNotificationListener } from "@/components/owner-sos-notification-listener";
+import { OwnerPortalShortcut } from "@/components/owner-portal-shortcut";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -29,7 +30,7 @@ export default async function AppHome() {
     db.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
   ]);
   const workshop = membership?.workshops as unknown as { name: string } | null;
-  if (!workshop && owner) return <><OwnerSosNotificationListener /><OwnerDashboard name={profile?.full_name || ""} /></>;
+  if (!workshop && owner) return <><OwnerSosNotificationListener /><OwnerDashboard name={profile?.full_name || ""} /><OwnerPortalShortcut /></>;
   if (!workshop || !membership) return <main className="grid min-h-screen place-items-center p-6"><OnboardingForm /></main>;
 
   const [{ count: clientsCount }, { count: vehiclesCount }, { count: ordersCount }, { count: productsCount }] = await Promise.all([
