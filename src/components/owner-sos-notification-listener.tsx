@@ -64,6 +64,15 @@ export function OwnerSosNotificationListener() {
     setActivating(true);
     setActivationMessage("Solicitando permissão para avisos…");
     try {
+      const soundReady = await arm();
+      if (!soundReady) {
+        setActivationMessage("Seu navegador bloqueou o som. Abra o app pelo Chrome e tente novamente.");
+        return;
+      }
+      play();
+      // Dá tempo para o usuário ver que o toque foi reconhecido antes de o
+      // navegador abrir o pedido de permissão.
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
       const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       if (!publicKey || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
         setActivationMessage("Este navegador não oferece avisos em segundo plano. Abra pelo Chrome ou instale o app na Tela Inicial.");
@@ -78,9 +87,10 @@ export function OwnerSosNotificationListener() {
       const current = await registration.pushManager.getSubscription();
       const subscription = current || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKey(publicKey) });
       const response = await fetch("/api/push-subscriptions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(subscription) });
-      const soundReady = await arm();
-      if (soundReady) { setArmed(true); window.localStorage.setItem("cr-connect-sound-consent", "true"); play(); }
-      setActivationMessage(response.ok ? "Avisos ativados neste celular. Você receberá notificações mesmo com o app fechado." : "O som foi ativado, mas não foi possível registrar os avisos agora. Tente novamente.");
+      if (!response.ok) { setActivationMessage("O som foi ativado, mas não foi possível registrar os avisos agora. Tente novamente."); return; }
+      setArmed(true);
+      window.localStorage.setItem("cr-connect-sound-consent", "true");
+      setToast({ id: "activation", title: "Avisos ativados", body: "Este celular receberá notificações mesmo com o app fechado.", created_at: new Date().toISOString() });
     } catch {
       setActivationMessage("Não foi possível ativar os avisos. No Chrome, toque no cadeado ao lado do endereço, abra Permissões e permita Notificações. Depois volte e tente novamente.");
     } finally {
