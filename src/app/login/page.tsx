@@ -10,8 +10,10 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(true);
   const [emailSent, setEmailSent] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [creatingAccount, setCreatingAccount] = useState(false);
 
   useEffect(() => {
+    setCreatingAccount(new URLSearchParams(window.location.search).get("novo") === "1");
     const db = createClient();
     db.auth.getUser().then(({ data: { user } }) => {
       if (user) window.location.replace("/app");
@@ -85,10 +87,10 @@ export default function LoginPage() {
       <form onSubmit={submit} className="w-full max-w-md rounded-2xl border border-[#5a461c] bg-[#121212] p-8 shadow-2xl">
         <Image src="/brand/cr-reparador.jpg" width={160} height={160} alt="CR Reparador Automotivo" className="mx-auto rounded-2xl" />
         <p className="mt-5 text-center text-sm font-bold tracking-[.18em] text-[#FFC107]">CR CONNECT</p>
-        <h1 className="mt-3 text-center text-3xl font-bold">Bem-vindo de volta</h1>
-        <p className="mt-2 text-center text-sm text-zinc-400">Use seu e-mail para receber um link seguro de acesso.</p>
+        <h1 className="mt-3 text-center text-3xl font-bold">{creatingAccount ? "Crie sua conta" : "Bem-vindo de volta"}</h1>
+        <p className="mt-2 text-center text-sm text-zinc-400">{creatingAccount ? "Informe seu e-mail. Após confirmar, você escolherá o tipo de cadastro." : "Use seu e-mail para receber um link seguro de acesso."}</p>
         <label className="mt-7 block text-sm">E-mail<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="field mt-2" placeholder="seuemail@exemplo.com" /></label>
-        <button disabled={busy} className="mt-5 w-full rounded-lg bg-[#FFC107] px-4 py-3 font-bold text-black disabled:opacity-60">{busy ? "Enviando…" : "Entrar"}</button>
+        <button disabled={busy} className="mt-5 w-full rounded-lg bg-[#FFC107] px-4 py-3 font-bold text-black disabled:opacity-60">{busy ? "Enviando…" : creatingAccount ? "Enviar confirmação" : "Entrar"}</button>
         {notice && <p className="mt-4 text-sm text-zinc-300">{notice}</p>}
       </form>
     </main>
