@@ -23,17 +23,18 @@ export default function AuthCallbackPage() {
       // dependendo do aparelho e do modelo de e-mail configurado.
       const code = params.get("code");
       const tokenHash = params.get("token_hash");
+      let validationError = "";
       if (code) {
         const { error: exchangeError } = await db.auth.exchangeCodeForSession(code);
         if (exchangeError) {
-          if (active) setError("Não foi possível validar este link. Solicite um novo link e abra somente o mais recente.");
-          return;
+          // Alguns navegadores já fazem essa troca automaticamente quando a
+          // página abre. Nesse caso o código parece usado, mas a sessão existe.
+          validationError = exchangeError.message;
         }
       } else if (tokenHash) {
         const { error: verifyError } = await db.auth.verifyOtp({ token_hash: tokenHash, type: params.get("type") || "email" });
         if (verifyError) {
-          if (active) setError("Não foi possível validar este link. Solicite um novo link e abra somente o mais recente.");
-          return;
+          validationError = verifyError.message;
         }
       }
 
@@ -47,7 +48,7 @@ export default function AuthCallbackPage() {
         await new Promise((resolve) => window.setTimeout(resolve, 400));
       }
 
-      if (active) setError("Não foi possível confirmar o acesso neste aparelho. Solicite um novo link e abra somente o mais recente.");
+      if (active) setError(validationError ? "Não foi possível validar este link. Solicite um novo link e abra somente o mais recente." : "Não foi possível confirmar o acesso neste aparelho. Solicite um novo link e abra somente o mais recente.");
     }
 
     void finishSignIn();
