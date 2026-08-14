@@ -72,8 +72,11 @@ export default function LoginPage() {
               <h1 className="mt-5 text-4xl font-black leading-tight text-white">CONFIRME NO SEU E-MAIL</h1>
               <p className="mt-6 text-xl font-semibold text-zinc-100">Abra o e-mail enviado para:</p>
               <p className="mt-2 break-all rounded-xl border border-[#5a461c] bg-black/30 p-4 text-lg font-bold text-[#FFC107]">{email}</p>
-              <p className="mt-6 text-lg leading-relaxed text-zinc-300">Procure a mensagem do <strong>CR CONNECT</strong> e toque em <strong>Confirmar acesso</strong>.</p>
-              <p className="mt-5 text-base text-zinc-400">Se não encontrar, verifique a pasta Spam ou Lixo eletrônico.</p>
+              <div className="mt-6 rounded-2xl border-2 border-[#FFC107] bg-[#FFC107]/10 p-5">
+                <p className="text-xl font-black leading-snug text-[#FFC107]">Clique no link que enviamos para o seu e-mail, para que possa ter acesso.</p>
+              </div>
+              <p className="mt-5 text-base text-zinc-300">Procure a mensagem do <strong>CR CONNECT</strong> e toque em <strong>Confirmar acesso</strong>.</p>
+              <p className="mt-4 text-base text-zinc-400">Se não encontrar, verifique a pasta Spam ou Lixo eletrônico.</p>
               <button type="button" onClick={() => { setEmailSent(false); setShowConfirmation(false); }} className="mt-8 rounded-lg border border-[#FFC107] px-5 py-3 font-bold text-[#FFC107]">Usar outro e-mail</button>
             </div>
           )}
