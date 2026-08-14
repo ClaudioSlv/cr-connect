@@ -2,9 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { PushNotificationSetup } from "@/components/push-notification-setup";
 
 type OwnerAlert = { id: string; title: string; body: string | null; created_at: string };
+
+function pushKey(value: string) {
+  const encoded = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4);
+  return Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
+}
 
 function useAlertSound() {
   const context = useRef<AudioContext | null>(null);
@@ -35,6 +39,8 @@ export function OwnerSosNotificationListener() {
   const known = useRef<Set<string> | null>(null);
   const [armed, setArmed] = useState(() => typeof window !== "undefined" && window.localStorage.getItem("cr-connect-sound-consent") === "true");
   const [toast, setToast] = useState<OwnerAlert | null>(null);
+  const [activationMessage, setActivationMessage] = useState("");
+  const [activating, setActivating] = useState(false);
   const { arm, play } = useAlertSound();
   function announce(item: OwnerAlert) {
     setToast(item); window.setTimeout(() => setToast((current) => current?.id === item.id ? null : current), 10000);
@@ -55,10 +61,28 @@ export function OwnerSosNotificationListener() {
     return () => { active = false; if (timer) window.clearInterval(timer); };
   }, [armed]);
   async function activate() {
-    const ok = await arm(); setArmed(ok);
-    if (ok) window.localStorage.setItem("cr-connect-sound-consent", "true");
-    if ("Notification" in window && Notification.permission === "default") await Notification.requestPermission();
-    if (ok) play();
+    setActivating(true);
+    setActivationMessage("Solicitando permissão para avisos…");
+    const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!publicKey || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      setActivationMessage("Este navegador não oferece avisos em segundo plano. Abra pelo Chrome ou instale o app na Tela Inicial.");
+      setActivating(false);
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      setActivationMessage("Permita as notificações do CR Connect nas configurações do celular para receber avisos.");
+      setActivating(false);
+      return;
+    }
+    const registration = await navigator.serviceWorker.register("/sw.js");
+    const current = await registration.pushManager.getSubscription();
+    const subscription = current || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKey(publicKey) });
+    const response = await fetch("/api/push-subscriptions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(subscription) });
+    const soundReady = await arm();
+    if (soundReady) { setArmed(true); window.localStorage.setItem("cr-connect-sound-consent", "true"); play(); }
+    setActivationMessage(response.ok ? "Avisos ativados neste celular. Você receberá notificações mesmo com o app fechado." : "O som foi ativado, mas não foi possível registrar os avisos agora. Tente novamente.");
+    setActivating(false);
   }
-  return <><PushNotificationSetup />{!armed && <button type="button" onClick={() => void activate()} className="fixed bottom-5 right-5 z-40 rounded-xl border border-[#FFC107] bg-[#171717] px-4 py-3 text-sm font-bold text-[#FFC107] shadow-xl">Ativar avisos CR SOS com som</button>}{toast && <div role="alert" className="fixed left-4 right-4 top-4 z-50 mx-auto max-w-md rounded-2xl border border-[#FFC107] bg-[#211805] p-4 shadow-2xl"><p className="font-bold text-[#FFC107]">{toast.title}</p><p className="mt-1 text-sm text-zinc-100">{toast.body}</p></div>}</>;
+  return <>{!armed && <div className="fixed bottom-5 left-5 right-5 z-40 mx-auto max-w-sm"><button type="button" disabled={activating} onClick={() => void activate()} className="w-full rounded-xl border border-[#FFC107] bg-[#171717] px-4 py-3 text-sm font-bold text-[#FFC107] shadow-xl disabled:opacity-60">{activating ? "Ativando avisos…" : "Ativar avisos CR SOS com som"}</button>{activationMessage && <p className="mt-2 rounded-lg border border-zinc-700 bg-black/90 p-3 text-xs text-zinc-100">{activationMessage}</p>}</div>}{toast && <div role="alert" className="fixed left-4 right-4 top-4 z-50 mx-auto max-w-md rounded-2xl border border-[#FFC107] bg-[#211805] p-4 shadow-2xl"><p className="font-bold text-[#FFC107]">{toast.title}</p><p className="mt-1 text-sm text-zinc-100">{toast.body}</p></div>}</>;
 }
