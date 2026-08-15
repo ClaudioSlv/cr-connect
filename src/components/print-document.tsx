@@ -45,7 +45,7 @@ export function PrintDocument({ type, number, client, vehicle, status, items, no
       try {
         const response = await fetch("/api/checkout-orcamento", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amount: total, budgetNumber: number, client }) });
         const result = await response.json().catch(() => ({})) as { publicUrl?: string };
-        if (response.ok && typeof result.publicUrl === "string") cardPayment = `<section class="card-payment"><div class="infinite-icon">∞</div><div><div class="label">CR CONNECT + INFINITEPAY</div><strong>Pagamento com cartão</strong><p>Valor no cartão: <b>${currency.format(total)}</b> · sem desconto</p><a href="${escapeHtml(result.publicUrl)}" target="_blank" rel="noopener noreferrer">Abrir pagamento seguro</a></div></section>`;
+        if (response.ok && typeof result.publicUrl === "string") cardPayment = `<section class="card-payment"><div class="infinite-icon">∞</div><div><div class="label">CR CONNECT + INFINITEPAY</div><strong>Pagamento com cartão</strong><p>Valor no cartão: <b>${currency.format(total)}</b></p><a href="${escapeHtml(result.publicUrl)}" target="_blank" rel="noopener noreferrer">Abrir pagamento seguro</a></div></section>`;
       } catch { /* O PDF continua disponível mesmo se a criação do checkout falhar. */ }
     }
 

@@ -118,7 +118,7 @@ export function BudgetsManager({ workshopId }: { workshopId: string }) {
       const result = await response.json().catch(() => ({})) as { publicUrl?: string; error?: string };
       if (!response.ok || !result.publicUrl) throw new Error(result.error || "Não foi possível criar o link de cartão.");
       const whatsappNumber = phone.startsWith("55") ? phone : `55${phone}`;
-      const text = `Olá, ${selected.clients?.full_name || "cliente"}! Segue o link para pagamento do orçamento por cartão, no valor de ${priceText(total)} (sem desconto): ${result.publicUrl}`;
+      const text = `Olá, ${selected.clients?.full_name || "cliente"}! Segue o link para pagamento do orçamento por cartão, no valor de ${priceText(total)}: ${result.publicUrl}`;
       window.open(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
       setMessage("WhatsApp aberto com o link de pagamento por cartão. Anexe o PDF do orçamento na conversa.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível criar o link de cartão."); }
