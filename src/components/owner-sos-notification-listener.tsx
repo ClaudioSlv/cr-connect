@@ -42,11 +42,14 @@ export function OwnerSosNotificationListener() {
   const [activationMessage, setActivationMessage] = useState("");
   const [activating, setActivating] = useState(false);
   const { arm, play } = useAlertSound();
+
   function announce(item: OwnerAlert) {
-    setToast(item); window.setTimeout(() => setToast((current) => current?.id === item.id ? null : current), 10000);
+    setToast(item);
+    window.setTimeout(() => setToast((current) => current?.id === item.id ? null : current), 10000);
     if (armed) play();
     if ("Notification" in window && Notification.permission === "granted") new Notification(item.title, { body: item.body || "Atualização no seu chamado CR SOS.", icon: "/brand/cr-reparador.jpg", tag: `cr-sos-owner-${item.id}` });
   }
+
   useEffect(() => {
     let active = true; let timer: number | undefined;
     async function load(initial = false) {
@@ -55,47 +58,46 @@ export function OwnerSosNotificationListener() {
       if (!active || !data) return;
       const alerts = data as OwnerAlert[];
       if (!known.current || initial) { known.current = new Set(alerts.map((item) => item.id)); return; }
-      alerts.filter((item) => !known.current?.has(item.id)).forEach(announce); known.current = new Set(alerts.map((item) => item.id));
+      alerts.filter((item) => !known.current?.has(item.id)).forEach(announce);
+      known.current = new Set(alerts.map((item) => item.id));
     }
     void load(true); timer = window.setInterval(() => void load(), 7000);
     return () => { active = false; if (timer) window.clearInterval(timer); };
   }, [armed]);
+
   async function activate() {
-    setActivating(true);
-    setActivationMessage("Solicitando permissão para avisos…");
+    setActivating(true); setActivationMessage("Solicitando permissão para avisos…");
     try {
       const soundReady = await arm();
-      if (!soundReady) {
-        setActivationMessage("Seu navegador bloqueou o som. Abra o app pelo Chrome e tente novamente.");
-        return;
-      }
-      play();
-      // Dá tempo para o usuário ver que o toque foi reconhecido antes de o
-      // navegador abrir o pedido de permissão.
+      if (!soundReady) { setActivationMessage("Seu navegador bloqueou o som. Abra pelo Chrome ou Firefox e tente novamente."); return; }
+
+      // O botão controla o som do CR SOS: confirmou o toque, está ativo e desaparece.
+      play(); setArmed(true); window.localStorage.setItem("cr-connect-sound-consent", "true");
+      setToast({ id: "activation", title: "Avisos com som ativados", body: "Este celular tocará quando receber atualizações do CR SOS.", created_at: new Date().toISOString() });
       await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+
       const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       if (!publicKey || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
-        setActivationMessage("Este navegador não oferece avisos em segundo plano. Abra pelo Chrome ou instale o app na Tela Inicial.");
+        setToast({ id: "activation-browser", title: "Som ativado", body: "Para receber com o app fechado, abra o CR Connect pelo Chrome instalado na Tela Inicial.", created_at: new Date().toISOString() });
         return;
       }
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
-        setActivationMessage("Permita as notificações do CR Connect nas configurações do celular para receber avisos.");
+        setToast({ id: "activation-permission", title: "Som ativado", body: "Permita as notificações do CR Connect para também receber avisos com o app fechado.", created_at: new Date().toISOString() });
         return;
       }
       const registration = await navigator.serviceWorker.register("/sw.js");
       const current = await registration.pushManager.getSubscription();
       const subscription = current || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKey(publicKey) });
       const response = await fetch("/api/push-subscriptions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(subscription) });
-      if (!response.ok) { setActivationMessage("O som foi ativado, mas não foi possível registrar os avisos agora. Tente novamente."); return; }
-      setArmed(true);
-      window.localStorage.setItem("cr-connect-sound-consent", "true");
-      setToast({ id: "activation", title: "Avisos ativados", body: "Este celular receberá notificações mesmo com o app fechado.", created_at: new Date().toISOString() });
+      if (response.ok) setToast({ id: "activation-push", title: "Avisos ativados", body: "Este celular também receberá notificações com o app fechado.", created_at: new Date().toISOString() });
     } catch {
-      setActivationMessage("Não foi possível ativar os avisos. No Chrome, toque no cadeado ao lado do endereço, abra Permissões e permita Notificações. Depois volte e tente novamente.");
-    } finally {
-      setActivating(false);
-    }
+      setToast({ id: "activation-local", title: "Som ativado", body: "Para receber avisos com o app fechado, permita Notificações nas permissões do site.", created_at: new Date().toISOString() });
+    } finally { setActivating(false); }
   }
-  return <>{!armed && <div className="fixed bottom-5 left-5 right-5 z-40 mx-auto max-w-sm"><button type="button" disabled={activating} onClick={() => void activate()} className="w-full rounded-xl border border-[#FFC107] bg-[#171717] px-4 py-3 text-sm font-bold text-[#FFC107] shadow-xl disabled:opacity-60">{activating ? "Ativando avisos…" : "Ativar avisos CR SOS com som"}</button>{activationMessage && <p className="mt-2 rounded-lg border border-zinc-700 bg-black/90 p-3 text-xs text-zinc-100">{activationMessage}</p>}</div>}{toast && <div role="alert" className="fixed left-4 right-4 top-4 z-50 mx-auto max-w-md rounded-2xl border border-[#FFC107] bg-[#211805] p-4 shadow-2xl"><p className="font-bold text-[#FFC107]">{toast.title}</p><p className="mt-1 text-sm text-zinc-100">{toast.body}</p></div>}</>;
+
+  return <>
+    {!armed && <div className="fixed bottom-5 left-5 right-5 z-40 mx-auto max-w-sm"><button type="button" disabled={activating} onClick={() => void activate()} className="w-full rounded-xl border border-[#FFC107] bg-[#171717] px-4 py-3 text-sm font-bold text-[#FFC107] shadow-xl disabled:opacity-60">{activating ? "Ativando avisos…" : "Ativar avisos CR SOS com som"}</button>{activationMessage && <p className="mt-2 rounded-lg border border-zinc-700 bg-black/90 p-3 text-xs text-zinc-100">{activationMessage}</p>}</div>}
+    {toast && <div role="alert" className="fixed left-4 right-4 top-4 z-50 mx-auto max-w-md rounded-2xl border border-[#FFC107] bg-[#211805] p-4 shadow-2xl"><p className="font-bold text-[#FFC107]">{toast.title}</p><p className="mt-1 text-sm text-zinc-100">{toast.body}</p></div>}
+  </>;
 }
