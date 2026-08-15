@@ -23,6 +23,9 @@ export default function AuthCallbackPage() {
       // dependendo do aparelho e do modelo de e-mail configurado.
       const code = params.get("code");
       const tokenHash = params.get("token_hash");
+      const fragment = new URLSearchParams(window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash);
+      const accessToken = fragment.get("access_token");
+      const refreshToken = fragment.get("refresh_token");
       let validationError = "";
       if (code) {
         const { error: exchangeError } = await db.auth.exchangeCodeForSession(code);
@@ -35,6 +38,14 @@ export default function AuthCallbackPage() {
         const { error: verifyError } = await db.auth.verifyOtp({ token_hash: tokenHash, type: params.get("type") || "email" });
         if (verifyError) {
           validationError = verifyError.message;
+        }
+      } else if (accessToken && refreshToken) {
+        // Alguns navegadores de celular recebem o magic link no formato
+        // implícito (#access_token). Salvar a sessão evita o falso erro de
+        // “link não concluído” nesses aparelhos.
+        const { error: sessionError } = await db.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        if (sessionError) {
+          validationError = sessionError.message;
         }
       }
 
