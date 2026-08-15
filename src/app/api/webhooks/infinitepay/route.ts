@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 const expectedAmounts = { pro: 2990, premium: 4490 } as const;
 
@@ -9,8 +9,19 @@ type WebhookPayload = {
   transaction_nsu?: string;
 };
 
+function admin() {
+  return createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  );
+}
+
 export async function POST(request: Request) {
   const handle = process.env.INFINITEPAY_HANDLE;
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ error: "Configuração do banco pendente." }, { status: 503 });
+  }
   if (!handle) return NextResponse.json({ error: "Integração não configurada." }, { status: 503 });
 
   const payload = await request.json().catch(() => null) as WebhookPayload | null;
@@ -18,7 +29,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Dados de pagamento incompletos." }, { status: 400 });
   }
 
-  const db = await createClient();
+  // Webhooks não possuem a sessão do administrador. Depois da validação na
+  // InfinitePay, esta credencial de servidor ativa somente a assinatura paga.
+  const db = admin();
   const { data: subscription } = await db
     .from("subscriptions")
     .select("workshop_id,plan_code,provider_reference")
