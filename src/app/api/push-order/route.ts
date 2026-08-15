@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 type Subscription = { endpoint: string; p256dh: string; auth: string };
-type Event = "request" | "status" | "budget";
+type Event = "request" | "status" | "budget" | "chat";
 
 const labels: Record<string, string> = { open: "O.S. aberta", diagnosing: "Veículo em diagnóstico", awaiting_approval: "Orçamento disponível", awaiting_part: "Aguardando peça", repairing: "Veículo em reparo", finished: "CARRO PRONTO PARA RETIRADA", delivered: "Veículo entregue", cancelled: "O.S. cancelada" };
 
@@ -26,6 +26,25 @@ export async function POST(request: Request) {
   const { data: { user } } = await session.auth.getUser();
   if (!id || !event || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = admin();
+
+  if (event === "chat") {
+    const { data: message } = await db.from("messages").select("workshop_id,client_id,owner_id").eq("id", id).maybeSingle();
+    if (!message) return NextResponse.json({ ok: true });
+    if (message.owner_id) {
+      if (message.owner_id !== user.id) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      const { data: members } = await db.from("workshop_users").select("user_id").eq("workshop_id", message.workshop_id);
+      const ids = (members || []).map((member) => member.user_id);
+      const { data: rows } = ids.length ? await db.from("push_subscriptions").select("endpoint,p256dh,auth").in("user_id", ids) : { data: [] as Subscription[] };
+      await send((rows || []) as Subscription[], "Nova mensagem do cliente", "Um cliente enviou uma nova mensagem.", "/app/chat");
+    } else {
+      const { data: membership } = await db.from("workshop_users").select("user_id").eq("workshop_id", message.workshop_id).eq("user_id", user.id).maybeSingle();
+      if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      const { data: link } = await db.from("client_portal_links").select("user_id").eq("client_id", message.client_id).maybeSingle();
+      const { data: rows } = link ? await db.from("push_subscriptions").select("endpoint,p256dh,auth").eq("user_id", link.user_id) : { data: [] as Subscription[] };
+      await send((rows || []) as Subscription[], "Nova mensagem da oficina", "Sua oficina enviou uma mensagem.", "/app/mensagens");
+    }
+    return NextResponse.json({ ok: true });
+  }
 
   if (event === "request") {
     const { data: item } = await db.from("service_requests").select("workshop_id,owner_id").eq("id", id).maybeSingle();
