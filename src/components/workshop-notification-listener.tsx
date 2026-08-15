@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { PushNotificationSetup } from "@/components/push-notification-setup";
+import { enablePushNotifications } from "@/components/push-notification-setup";
 
-type AppNotification = { id: string; workshop_id: string; title: string; body: string | null; created_at: string };
+type AppNotification = { id: string; workshop_id: string; title: string; body: string | null; created_at: string; read_at: string | null };
 
 function useAlertSound() {
   const context = useRef<AudioContext | null>(null);
@@ -34,12 +34,13 @@ export function WorkshopNotificationListener() {
   const db = createClient();
   const knownIds = useRef<Set<string> | null>(null);
   const workshopId = useRef<string | null>(null);
-  const [alertsArmed, setAlertsArmed] = useState(() => typeof window !== "undefined" && window.localStorage.getItem("cr-connect-sound-consent") === "true");
+  const [alertsArmed, setAlertsArmed] = useState(false);
   const [toast, setToast] = useState<AppNotification | null>(null);
+  const [unread, setUnread] = useState(0);
   const { arm, play } = useAlertSound();
 
   function announce(item: AppNotification) {
-    setToast(item); window.setTimeout(() => setToast((current) => current?.id === item.id ? null : current), 10000);
+    setToast(item); setUnread((current) => current + (item.read_at ? 0 : 1)); window.setTimeout(() => setToast((current) => current?.id === item.id ? null : current), 10000);
     if (alertsArmed) play();
     if ("Notification" in window && Notification.permission === "granted") new Notification(item.title, { body: item.body || "Há uma atualização no CR Connect.", icon: "/brand/cr-reparador.jpg", tag: `cr-connect-${item.id}` });
   }
@@ -50,9 +51,10 @@ export function WorkshopNotificationListener() {
       const { data: { user } } = await db.auth.getUser(); if (!user || !active) return;
       const membership = await db.from("workshop_users").select("workshop_id").eq("user_id", user.id).limit(1).maybeSingle();
       const id = membership.data?.workshop_id; if (!id || !active) return; workshopId.current = id;
-      const result = await db.from("notifications").select("id,workshop_id,title,body,created_at").eq("workshop_id", id).eq("user_id", user.id).order("created_at", { ascending: false }).limit(30);
+      const result = await db.from("notifications").select("id,workshop_id,title,body,created_at,read_at").eq("workshop_id", id).eq("user_id", user.id).order("created_at", { ascending: false }).limit(30);
       if (!active || !result.data) return;
       const items = result.data as AppNotification[];
+      setUnread(items.filter((item) => !item.read_at).length);
       if (!knownIds.current || initial) { knownIds.current = new Set(items.map((item) => item.id)); return; }
       items.filter((item) => !knownIds.current?.has(item.id)).forEach(announce); knownIds.current = new Set(items.map((item) => item.id));
     }
@@ -70,11 +72,13 @@ export function WorkshopNotificationListener() {
   }, [alertsArmed]);
 
   async function enableAlerts() {
-    const ok = await arm(); setAlertsArmed(ok);
-    if (ok) window.localStorage.setItem("cr-connect-sound-consent", "true");
-    if ("Notification" in window && Notification.permission === "default") await Notification.requestPermission();
-    if (ok) play();
+    const soundReady = await arm();
+    const push = await enablePushNotifications();
+    setAlertsArmed(soundReady);
+    if (soundReady) play();
+    setToast({ id: "activation", workshop_id: "", title: soundReady ? "Avisos com som ativados" : "Som não disponível", body: push.message, created_at: new Date().toISOString(), read_at: null });
+    window.setTimeout(() => setToast((current) => current?.id === "activation" ? null : current), 7000);
   }
 
-  return <><PushNotificationSetup />{!alertsArmed && <button type="button" onClick={() => void enableAlerts()} className="fixed bottom-5 right-5 z-40 rounded-xl border border-[#FFC107] bg-[#171717] px-4 py-3 text-sm font-bold text-[#FFC107] shadow-xl">Ativar avisos CR SOS com som</button>}{toast && <div role="alert" className="fixed left-4 right-4 top-4 z-50 mx-auto max-w-md rounded-2xl border border-[#FFC107] bg-[#211805] p-4 shadow-2xl"><p className="font-bold text-[#FFC107]">{toast.title}</p><p className="mt-1 text-sm text-zinc-100">{toast.body || "Há uma atualização no CR Connect."}</p><p className="mt-2 text-xs text-zinc-400">Abra Notificações para ver os detalhes.</p></div>}</>;
+  return <>{unread > 0 && <a href="/app/notificacoes" className="fixed bottom-5 left-5 z-40 max-w-xs rounded-xl border border-[#FFC107] bg-[#211805] px-4 py-3 text-sm font-bold text-[#FFC107] shadow-xl">🔔 {unread} aviso{unread > 1 ? "s" : ""} pendente{unread > 1 ? "s" : ""}. Abrir notificações</a>}{!alertsArmed && <button type="button" onClick={() => void enableAlerts()} className="fixed bottom-5 right-5 z-40 rounded-xl border border-[#FFC107] bg-[#171717] px-4 py-3 text-sm font-bold text-[#FFC107] shadow-xl">Ativar avisos com som</button>}{toast && <div role="alert" className="fixed left-4 right-4 top-4 z-50 mx-auto max-w-md rounded-2xl border border-[#FFC107] bg-[#211805] p-4 shadow-2xl"><p className="font-bold text-[#FFC107]">{toast.title}</p><p className="mt-1 text-sm text-zinc-100">{toast.body || "Há uma atualização no CR Connect."}</p><p className="mt-2 text-xs text-zinc-400">Abra Notificações para ver os detalhes.</p></div>}</>;
 }

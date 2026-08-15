@@ -22,8 +22,8 @@ set search_path = public
 as $$
 declare
   request_id uuid;
-  client_id uuid;
-  vehicle_id uuid;
+  v_client_id uuid;
+  v_vehicle_id uuid;
   owner_vehicle public.owner_vehicles%rowtype;
   owner_name text;
   owner_email text;
@@ -56,20 +56,20 @@ begin
   left join public.vehicle_owners vo on vo.user_id = u.id
   where u.id = auth.uid();
 
-  select c.id into client_id
+  select c.id into v_client_id
   from public.client_portal_links link
   join public.clients c on c.id = link.client_id
   where link.user_id = auth.uid() and c.workshop_id = p_workshop_id
   limit 1;
 
-  if client_id is null and owner_email is not null then
-    select id into client_id
+  if v_client_id is null and owner_email is not null then
+    select c.id into v_client_id
     from public.clients
     where workshop_id = p_workshop_id and lower(coalesce(email, '')) = owner_email
     limit 1;
   end if;
 
-  if client_id is null then
+  if v_client_id is null then
     insert into public.clients(workshop_id, full_name, phone, whatsapp, email)
     values (
       p_workshop_id,
@@ -78,36 +78,36 @@ begin
       nullif(trim(owner_phone), ''),
       owner_email
     )
-    returning id into client_id;
+    returning id into v_client_id;
   end if;
 
   insert into public.client_portal_links(client_id, user_id)
-  values (client_id, auth.uid())
+  values (v_client_id, auth.uid())
   on conflict (client_id) do update set user_id = excluded.user_id;
 
-  select v.id into vehicle_id
+  select v.id into v_vehicle_id
   from public.vehicles v
   where v.workshop_id = p_workshop_id
-    and v.client_id = client_id
+    and v.client_id = v_client_id
     and coalesce(upper(v.plate), '') = coalesce(upper(owner_vehicle.plate), '')
     and lower(v.model) = lower(owner_vehicle.model)
   limit 1;
 
-  if vehicle_id is null then
+  if v_vehicle_id is null then
     insert into public.vehicles(workshop_id, client_id, plate, brand, model, year_model)
     values (
       p_workshop_id,
-      client_id,
+      v_client_id,
       nullif(upper(trim(coalesce(owner_vehicle.plate, ''))), ''),
       coalesce(nullif(trim(owner_vehicle.brand), ''), 'Não informado'),
       owner_vehicle.model,
       owner_vehicle.year
     )
-    returning id into vehicle_id;
+    returning id into v_vehicle_id;
   end if;
 
   insert into public.service_requests(workshop_id, client_id, vehicle_id, owner_id, complaint)
-  values (p_workshop_id, client_id, vehicle_id, auth.uid(), trim(p_complaint))
+  values (p_workshop_id, v_client_id, v_vehicle_id, auth.uid(), trim(p_complaint))
   returning id into request_id;
 
   perform public.notify_workshop_members(
