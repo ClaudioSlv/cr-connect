@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { OwnerTopbar } from "@/components/owner-topbar";
 
 type Vehicle = { id: string; plate: string | null; brand: string | null; model: string; year: number | null };
 type SosRequest = { id: string; service_type: string; status: "requested" | "accepted" | "declined" | "cancelled" | "completed"; created_at: string; feedback_rating: number | null; feedback_text: string | null; workshops: { name: string } | null };
@@ -63,7 +64,7 @@ export function OwnerDashboard({ name }: { name: string }) {
 
   async function signOut() { await db.auth.signOut(); window.location.assign("/"); }
 
-  return <main className="min-h-screen bg-[#0c0c0d] p-5 text-zinc-100 md:p-10"><div className="mx-auto max-w-5xl">
+  return <main className="min-h-screen bg-[#0c0c0d] p-5 text-zinc-100 md:p-10"><div className="mx-auto max-w-5xl"><OwnerTopbar name={name} />
     <section className="relative overflow-hidden rounded-3xl border border-[#513f15] bg-black p-6 shadow-2xl md:p-9" style={{ backgroundImage: "linear-gradient(90deg, rgba(0,0,0,.96) 8%, rgba(0,0,0,.78) 48%, rgba(0,0,0,.20)), url('/brand/cr-connect-hero.png')", backgroundSize: "cover", backgroundPosition: "center" }}>
       <div className="relative z-10 max-w-xl"><div className="flex items-start justify-between gap-4"><p className="text-xs font-black tracking-[.22em] text-[#FFC107]">CR CONNECT · PROPRIETÁRIO</p><button onClick={signOut} className="rounded-lg border border-zinc-500 bg-black/30 px-4 py-2 text-sm font-bold backdrop-blur hover:border-[#FFC107]">Sair</button></div><h1 className="mt-7 text-4xl font-black leading-tight sm:text-5xl">Olá, {name || "motorista"}</h1><p className="mt-3 max-w-md text-base leading-relaxed text-zinc-200">Seu carro sempre conectado. Cadastre seus veículos, acompanhe a O.S. e peça ajuda pelo CR SOS quando precisar.</p><div className="mt-7 flex flex-wrap gap-3"><a href="/sos" className="rounded-xl bg-[#FFC107] px-5 py-3 font-black text-black shadow-lg">Abrir CR SOS</a><a href="/app/minhas-os" className="rounded-xl border border-[#FFC107] bg-black/30 px-5 py-3 font-black text-[#FFC107] backdrop-blur">Minhas O.S.</a></div></div>
     </section>

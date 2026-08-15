@@ -1,0 +1,31 @@
+"use client";
+
+import { ChangeEvent, useEffect, useRef, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+
+type ClientNotification = { id: string; title: string; body: string | null; created_at: string; read_at: string | null };
+
+export function OwnerTopbar({ name }: { name: string }) {
+  const db = createClient(); const inputRef = useRef<HTMLInputElement>(null);
+  const [notifications, setNotifications] = useState<ClientNotification[]>([]); const [open, setOpen] = useState(false); const [avatarUrl, setAvatarUrl] = useState<string | null>(null); const [message, setMessage] = useState("");
+  async function load() {
+    const { data: { user } } = await db.auth.getUser(); if (!user) return;
+    const [notificationResult, profileResult] = await Promise.all([db.from("client_notifications").select("id,title,body,created_at,read_at").order("created_at", { ascending: false }).limit(20), db.from("profiles").select("avatar_path").eq("id", user.id).maybeSingle()]);
+    if (!notificationResult.error) setNotifications((notificationResult.data || []) as ClientNotification[]);
+    const path = profileResult.data?.avatar_path; if (path) { const signed = await db.storage.from("owner-avatars").createSignedUrl(path, 3600); if (!signed.error) setAvatarUrl(signed.data.signedUrl); }
+  }
+  useEffect(() => { void load(); const timer = window.setInterval(() => void load(), 10000); return () => window.clearInterval(timer); }, []);
+  async function markRead() { const ids = notifications.filter((item) => !item.read_at).map((item) => item.id); if (!ids.length) return; const now = new Date().toISOString(); await db.from("client_notifications").update({ read_at: now }).in("id", ids); setNotifications((current) => current.map((item) => ids.includes(item.id) ? { ...item, read_at: now } : item)); }
+  async function toggleNotifications() { if (!open) await markRead(); setOpen((current) => !current); }
+  async function uploadAvatar(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]; if (!file) return;
+    if (!file.type.startsWith("image/") || file.size > 2 * 1024 * 1024) { setMessage("Escolha uma imagem de até 2 MB."); return; }
+    const { data: { user } } = await db.auth.getUser(); if (!user) return;
+    setMessage("Salvando foto..."); const extension = file.name.split(".").pop() || "jpg"; const path = `${user.id}/perfil.${extension}`;
+    const upload = await db.storage.from("owner-avatars").upload(path, file, { upsert: true, contentType: file.type }); if (upload.error) { setMessage(upload.error.message); return; }
+    const update = await db.from("profiles").update({ avatar_path: path }).eq("id", user.id); if (update.error) { setMessage(update.error.message); return; }
+    const signed = await db.storage.from("owner-avatars").createSignedUrl(path, 3600); if (!signed.error) setAvatarUrl(signed.data.signedUrl); setMessage("Foto atualizada.");
+  }
+  const unread = notifications.filter((item) => !item.read_at).length; const initial = (name || "C").trim().charAt(0).toUpperCase();
+  return <div className="relative flex justify-end gap-2 pb-3"><div className="relative flex items-center gap-2"><button type="button" onClick={() => void toggleNotifications()} aria-label="Abrir notificações" className="relative grid h-11 w-11 place-items-center rounded-full border border-zinc-500 bg-black/45 text-xl backdrop-blur">🔔{unread > 0 && <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-[#FFC107] px-1 text-[11px] font-black text-black">{unread > 9 ? "9+" : unread}</span>}</button><button type="button" onClick={() => inputRef.current?.click()} aria-label="Alterar foto de perfil" className="grid h-11 w-11 overflow-hidden rounded-full border-2 border-[#FFC107] bg-zinc-800 text-sm font-black text-[#FFC107]">{avatarUrl ? <img src={avatarUrl} alt="Foto de perfil" className="h-full w-full object-cover" /> : initial}</button><input ref={inputRef} onChange={(event) => void uploadAvatar(event)} accept="image/*" type="file" className="hidden"/>{open && <section className="absolute right-0 top-14 z-30 w-[min(22rem,80vw)] rounded-2xl border border-zinc-700 bg-[#151515] p-4 text-left shadow-2xl"><div className="flex items-center justify-between"><b>Notificações</b><button type="button" onClick={() => setOpen(false)} className="text-zinc-400">Fechar</button></div><div className="mt-3 max-h-72 space-y-2 overflow-y-auto">{notifications.length === 0 && <p className="text-sm text-zinc-400">Nenhuma notificação ainda.</p>}{notifications.map((item) => <article key={item.id} className={`rounded-xl border p-3 text-sm ${item.read_at ? "border-zinc-800 bg-black/20" : "border-[#FFC107]/60 bg-[#211805]"}`}><b className="block text-[#FFC107]">{item.title}</b>{item.body && <p className="mt-1 text-zinc-200">{item.body}</p>}<small className="mt-2 block text-zinc-500">{new Date(item.created_at).toLocaleString("pt-BR")}</small></article>)}</div></section>}{message && <p className="absolute right-0 top-14 z-40 w-60 rounded-lg border border-[#FFC107] bg-[#211805] p-2 text-xs text-[#FFC107]">{message}</p>}</div></div>;
+}
