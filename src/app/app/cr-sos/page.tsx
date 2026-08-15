@@ -13,7 +13,7 @@ export default async function SosPage() {
   const workshop = data.workshops as unknown as { name: string; emergency_enabled: boolean; emergency_services: string[]; latitude: number | null; longitude: number | null; emergency_radius_km: number; cr_sos_granted: boolean };
   const [{ data: subscription }, { data: requests }] = await Promise.all([
     db.from("subscriptions").select("plan_code,status").eq("workshop_id", data.workshop_id).maybeSingle(),
-    db.from("sos_requests").select("id,requester_name,requester_phone,service_type,description,status,created_at,viewed_at,feedback_rating,feedback_text,feedback_at").eq("workshop_id", data.workshop_id).order("created_at", { ascending: false }),
+    db.from("sos_requests").select("id,requester_name,requester_phone,service_type,description,location_reference,status,created_at,viewed_at,feedback_rating,feedback_text,feedback_at").eq("workshop_id", data.workshop_id).order("created_at", { ascending: false }),
   ]);
   const isPremium = workshop.cr_sos_granted || (subscription?.plan_code === "premium" && subscription.status === "active");
 
