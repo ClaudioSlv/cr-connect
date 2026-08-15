@@ -44,8 +44,7 @@ export function OwnerSosNotificationListener() {
   const { arm, play } = useAlertSound();
 
   function announce(item: OwnerAlert) {
-    setToast(item);
-    window.setTimeout(() => setToast((current) => current?.id === item.id ? null : current), 10000);
+    setToast(item); window.setTimeout(() => setToast((current) => current?.id === item.id ? null : current), 10000);
     if (armed) play();
     if ("Notification" in window && Notification.permission === "granted") new Notification(item.title, { body: item.body || "Atualização no seu chamado CR SOS.", icon: "/brand/cr-reparador.jpg", tag: `cr-sos-owner-${item.id}` });
   }
@@ -58,41 +57,35 @@ export function OwnerSosNotificationListener() {
       if (!active || !data) return;
       const alerts = data as OwnerAlert[];
       if (!known.current || initial) { known.current = new Set(alerts.map((item) => item.id)); return; }
-      alerts.filter((item) => !known.current?.has(item.id)).forEach(announce);
-      known.current = new Set(alerts.map((item) => item.id));
+      alerts.filter((item) => !known.current?.has(item.id)).forEach(announce); known.current = new Set(alerts.map((item) => item.id));
     }
     void load(true); timer = window.setInterval(() => void load(), 7000);
     return () => { active = false; if (timer) window.clearInterval(timer); };
   }, [armed]);
 
   async function activate() {
-    setActivating(true); setActivationMessage("Solicitando permissão para avisos…");
+    // A confirmação não depende do áudio: alguns navegadores deixam o resume()
+    // pendente e antes isso fazia o botão parecer travado.
+    setArmed(true);
+    window.localStorage.setItem("cr-connect-sound-consent", "true");
+    setToast({ id: "activation", title: "Avisos ativados", body: "Este celular está preparado para receber atualizações do CR SOS.", created_at: new Date().toISOString() });
+    setActivating(true); setActivationMessage("");
     try {
       const soundReady = await arm();
-      if (!soundReady) { setActivationMessage("Seu navegador bloqueou o som. Abra pelo Chrome ou Firefox e tente novamente."); return; }
-
-      // O botão controla o som do CR SOS: confirmou o toque, está ativo e desaparece.
-      play(); setArmed(true); window.localStorage.setItem("cr-connect-sound-consent", "true");
-      setToast({ id: "activation", title: "Avisos com som ativados", body: "Este celular tocará quando receber atualizações do CR SOS.", created_at: new Date().toISOString() });
-      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-
+      if (!soundReady) { setToast({ id: "activation-no-sound", title: "Avisos ativados", body: "O navegador bloqueou o teste de som, mas o aviso foi ativado.", created_at: new Date().toISOString() }); return; }
+      play();
+      setToast({ id: "activation-sound", title: "Avisos com som ativados", body: "Este celular tocará quando receber atualizações do CR SOS.", created_at: new Date().toISOString() });
       const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!publicKey || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
-        setToast({ id: "activation-browser", title: "Som ativado", body: "Para receber com o app fechado, abra o CR Connect pelo Chrome instalado na Tela Inicial.", created_at: new Date().toISOString() });
-        return;
-      }
+      if (!publicKey || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
       const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        setToast({ id: "activation-permission", title: "Som ativado", body: "Permita as notificações do CR Connect para também receber avisos com o app fechado.", created_at: new Date().toISOString() });
-        return;
-      }
+      if (permission !== "granted") return;
       const registration = await navigator.serviceWorker.register("/sw.js");
       const current = await registration.pushManager.getSubscription();
       const subscription = current || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKey(publicKey) });
       const response = await fetch("/api/push-subscriptions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(subscription) });
       if (response.ok) setToast({ id: "activation-push", title: "Avisos ativados", body: "Este celular também receberá notificações com o app fechado.", created_at: new Date().toISOString() });
     } catch {
-      setToast({ id: "activation-local", title: "Som ativado", body: "Para receber avisos com o app fechado, permita Notificações nas permissões do site.", created_at: new Date().toISOString() });
+      setToast({ id: "activation-local", title: "Avisos ativados", body: "Para avisos com o app fechado, permita notificações nas permissões do site.", created_at: new Date().toISOString() });
     } finally { setActivating(false); }
   }
 
