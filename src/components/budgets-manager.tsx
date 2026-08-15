@@ -6,7 +6,7 @@ import { PrintDocument } from "@/components/print-document";
 
 type Client = { id: string; full_name: string };
 type Vehicle = { id: string; client_id: string; brand: string; model: string };
-type Budget = { id: string; client_id: string; vehicle_id: string; status: string; clients: Client | null; vehicles: Vehicle | null };
+type Budget = { id: string; client_id: string; vehicle_id: string; service_order_id: string | null; status: string; clients: Client | null; vehicles: Vehicle | null };
 type Item = { id: string; description: string; kind: string; quantity: number; unit_price: number; discount: number };
 type Catalog = { id: string; category: string; name: string; minimum_price: number; maximum_price: number };
 type TimeRate = { id: string; name: string; price: number };
@@ -27,7 +27,7 @@ export function BudgetsManager({ workshopId }: { workshopId: string }) {
     const [clientsResult, vehiclesResult, budgetsResult, catalogResult, ratesResult] = await Promise.all([
       db.from("clients").select("id,full_name").eq("workshop_id", workshopId),
       db.from("vehicles").select("id,client_id,brand,model").eq("workshop_id", workshopId),
-      db.from("budgets").select("id,client_id,vehicle_id,status,clients(id,full_name),vehicles(id,client_id,brand,model)").eq("workshop_id", workshopId).order("created_at", { ascending: false }),
+      db.from("budgets").select("id,client_id,vehicle_id,service_order_id,status,clients(id,full_name),vehicles(id,client_id,brand,model)").eq("workshop_id", workshopId).order("created_at", { ascending: false }),
       db.from("labor_price_catalog").select("id,category,name,minimum_price,maximum_price").eq("workshop_id", workshopId).order("category").order("name"),
       db.from("labor_time_rates").select("id,name,price").eq("workshop_id", workshopId).order("name"),
     ]);
@@ -49,9 +49,10 @@ export function BudgetsManager({ workshopId }: { workshopId: string }) {
 
   async function create(event: FormEvent) {
     event.preventDefault(); setSaving(true); setMessage("");
-    const existing = await db.from("budgets").select("id,client_id,vehicle_id,status,clients(id,full_name),vehicles(id,client_id,brand,model)").eq("workshop_id", workshopId).eq("client_id", client).eq("vehicle_id", vehicle).in("status", ["draft", "sent"]).limit(1).maybeSingle();
+    const existing = await db.from("budgets").select("id,client_id,vehicle_id,service_order_id,status,clients(id,full_name),vehicles(id,client_id,brand,model)").eq("workshop_id", workshopId).eq("client_id", client).eq("vehicle_id", vehicle).in("status", ["draft", "sent"]).limit(1).maybeSingle();
     if (existing.data) { const openBudget = existing.data as unknown as Budget; setSelected(openBudget); void loadItems(openBudget.id); setMessage("Já existe um orçamento em aberto para este cliente e veículo. Ele foi aberto para edição."); setSaving(false); return; }
-    const { data, error } = await db.from("budgets").insert({ workshop_id: workshopId, client_id: client, vehicle_id: vehicle, status: "draft" }).select("id,client_id,vehicle_id,status,clients(id,full_name),vehicles(id,client_id,brand,model)").single();
+    const orderResult = await db.from("service_orders").select("id").eq("workshop_id", workshopId).eq("client_id", client).eq("vehicle_id", vehicle).not("status", "in", "(cancelled,delivered)").order("opened_at", { ascending: false }).limit(1).maybeSingle();
+    const { data, error } = await db.from("budgets").insert({ workshop_id: workshopId, client_id: client, vehicle_id: vehicle, service_order_id: orderResult.data?.id || null, status: "draft" }).select("id,client_id,vehicle_id,service_order_id,status,clients(id,full_name),vehicles(id,client_id,brand,model)").single();
     setSaving(false); if (error) setMessage(error.message); else { setSelected(data as unknown as Budget); setItems([]); setMessage("Orçamento criado. Adicione serviços e peças."); void load(); }
   }
   function toggleSelected(id: string, current: string[], setCurrent: (items: string[]) => void) {
@@ -106,7 +107,7 @@ export function BudgetsManager({ workshopId }: { workshopId: string }) {
   }
   async function removeItem(item: Item) { if (!window.confirm(`Excluir “${item.description}” deste orçamento?`)) return; if (!await reopenForEditing()) return; const { error } = await db.from("budget_items").delete().eq("id", item.id).eq("workshop_id", workshopId); setMessage(error?.message || "Item excluído. Envie novamente para o cliente caso já estivesse em aprovação."); if (!error && selected) void loadItems(selected.id); }
   async function removeBudget(budget: Budget) { if (!window.confirm(`Excluir este orçamento de ${budget.clients?.full_name || "cliente"}?`)) return; const { error } = await db.from("budgets").delete().eq("id", budget.id).eq("workshop_id", workshopId); if (!error && selected?.id === budget.id) { setSelected(null); setItems([]); } setMessage(error?.message || "Orçamento excluído."); if (!error) void load(); }
-  async function send() { if (!selected || items.length === 0) { setMessage("Adicione pelo menos um serviço ou peça antes de enviar."); return; } setSaving(true); const { error } = await db.from("budgets").update({ status: "sent" }).eq("id", selected.id).eq("workshop_id", workshopId); setSaving(false); if (!error) { setSelected({ ...selected, status: "sent" }); void fetch("/api/push-order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: selected.id, event: "budget" }) }); void load(); } setMessage(error?.message || "Orçamento enviado. O cliente receberá um aviso no aplicativo."); }
+  async function send() { if (!selected || items.length === 0) { setMessage("Adicione pelo menos um serviço ou peça antes de enviar."); return; } setSaving(true); if (selected.service_order_id) { const orderUpdate = await db.from("service_orders").update({ status: "awaiting_approval" }).eq("id", selected.service_order_id).eq("workshop_id", workshopId); if (orderUpdate.error) { setSaving(false); setMessage(orderUpdate.error.message); return; } } const { error } = await db.from("budgets").update({ status: "sent" }).eq("id", selected.id).eq("workshop_id", workshopId); setSaving(false); if (!error) { setSelected({ ...selected, status: "sent" }); void fetch("/api/push-order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: selected.id, event: "budget" }) }); void load(); } setMessage(error?.message || "Orçamento enviado. O cliente receberá um aviso no aplicativo."); }
   function choose(budget: Budget) { setSelected(budget); setClient(budget.client_id); setVehicle(budget.vehicle_id); setItems([]); void loadItems(budget.id); }
 
   return <div className="grid gap-8 xl:grid-cols-[400px_1fr]">
