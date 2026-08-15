@@ -34,7 +34,7 @@ export function WorkshopNotificationListener() {
   const db = createClient();
   const knownIds = useRef<Set<string> | null>(null);
   const workshopId = useRef<string | null>(null);
-  const [alertsArmed, setAlertsArmed] = useState(false);
+  const [alertsArmed, setAlertsArmed] = useState(() => typeof window !== "undefined" && window.localStorage.getItem("cr-connect-workshop-alerts") === "true");
   const [toast, setToast] = useState<AppNotification | null>(null);
   const [unread, setUnread] = useState(0);
   const { arm, play } = useAlertSound();
@@ -74,9 +74,12 @@ export function WorkshopNotificationListener() {
   async function enableAlerts() {
     const soundReady = await arm();
     const push = await enablePushNotifications();
-    setAlertsArmed(soundReady);
+    // A confirmação fica salva para o botão não voltar após atualizar ou reabrir.
+    // Mesmo se o navegador bloquear o primeiro som, o push continua disponível.
+    window.localStorage.setItem("cr-connect-workshop-alerts", "true");
+    setAlertsArmed(true);
     if (soundReady) play();
-    setToast({ id: "activation", workshop_id: "", title: soundReady ? "Avisos com som ativados" : "Som não disponível", body: push.message, created_at: new Date().toISOString(), read_at: null });
+    setToast({ id: "activation", workshop_id: "", title: "Avisos ativados", body: push.ok ? push.message : `${push.message} Os avisos dentro do app continuam ativos.`, created_at: new Date().toISOString(), read_at: null });
     window.setTimeout(() => setToast((current) => current?.id === "activation" ? null : current), 7000);
   }
 
