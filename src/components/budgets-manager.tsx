@@ -115,10 +115,10 @@ export function BudgetsManager({ workshopId }: { workshopId: string }) {
     setSaving(true); setMessage("Criando link de cartão…");
     try {
       const response = await fetch("/api/checkout-orcamento", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amount: total, budgetNumber: selected.id.slice(0, 8).toUpperCase(), client: selected.clients?.full_name || "Cliente" }) });
-      const result = await response.json().catch(() => ({})) as { checkoutUrl?: string; error?: string };
-      if (!response.ok || !result.checkoutUrl) throw new Error(result.error || "Não foi possível criar o link de cartão.");
+      const result = await response.json().catch(() => ({})) as { publicUrl?: string; error?: string };
+      if (!response.ok || !result.publicUrl) throw new Error(result.error || "Não foi possível criar o link de cartão.");
       const whatsappNumber = phone.startsWith("55") ? phone : `55${phone}`;
-      const text = `Olá, ${selected.clients?.full_name || "cliente"}! Segue o link para pagamento do orçamento por cartão, no valor de ${priceText(total)} (sem desconto): ${result.checkoutUrl}`;
+      const text = `Olá, ${selected.clients?.full_name || "cliente"}! Segue o link para pagamento do orçamento por cartão, no valor de ${priceText(total)} (sem desconto): ${result.publicUrl}`;
       window.open(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
       setMessage("WhatsApp aberto com o link de pagamento por cartão. Anexe o PDF do orçamento na conversa.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível criar o link de cartão."); }

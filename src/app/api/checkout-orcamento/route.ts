@@ -32,5 +32,8 @@ export async function POST(request: Request) {
   if (!payment.ok) return NextResponse.json({ error: "A InfinitePay não conseguiu criar o pagamento por cartão." }, { status: 502 });
   const checkoutUrl = response?.url || response?.checkout_url || response?.link;
   if (typeof checkoutUrl !== "string") return NextResponse.json({ error: "A InfinitePay retornou um link inválido." }, { status: 502 });
-  return NextResponse.json({ checkoutUrl });
+  const token = crypto.randomUUID().replace(/-/g, "").slice(0, 14);
+  const { error } = await db.from("payment_links").insert({ workshop_id: membership.workshop_id, token, checkout_url: checkoutUrl, client_name: clientName, budget_number: budgetNumber, amount });
+  if (error) return NextResponse.json({ error: "Checkout criado, mas não foi possível preparar o link curto." }, { status: 500 });
+  return NextResponse.json({ checkoutUrl, publicUrl: `${origin}/p/${token}` });
 }
