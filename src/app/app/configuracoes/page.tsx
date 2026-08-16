@@ -11,7 +11,7 @@ export default async function SettingsPage() {
 
   const { data: membership } = await db
     .from("workshop_users")
-    .select("workshop_id,role,workshops(name,legal_name,document,phone,whatsapp,email,address,city,state,postal_code)")
+    .select("workshop_id,role,workshops(name,legal_name,document,phone,whatsapp,email,address,city,state,postal_code,pix_discount_percentage)")
     .eq("user_id", user.id)
     .limit(1)
     .maybeSingle();

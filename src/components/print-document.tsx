@@ -1,17 +1,30 @@
 "use client";
 
 import QRCode from "qrcode";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 type Line = { description: string; quantity: number; unit_price: number; discount?: number };
 type Props = { type: "Orçamento" | "Ordem de Serviço"; number: string; client: string; vehicle: string; status: string; items: Line[]; note?: string | null };
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const appUrl = "https://cr-connect-ic3w.vercel.app";
 const pixKey = "+5513991320205";
-const pixDiscountPercentage = 7;
 
 export function PrintDocument({ type, number, client, vehicle, status, items, note }: Props) {
   const [message, setMessage] = useState("");
+  const [pixDiscountPercentage, setPixDiscountPercentage] = useState(7);
+  const db = createClient();
+
+  useEffect(() => {
+    async function loadPixDiscount() {
+      const { data: { user } } = await db.auth.getUser(); if (!user) return;
+      const { data: membership } = await db.from("workshop_users").select("workshop_id").eq("user_id", user.id).limit(1).maybeSingle();
+      if (!membership) return;
+      const { data: workshop } = await db.from("workshops").select("pix_discount_percentage").eq("id", membership.workshop_id).maybeSingle();
+      const value = Number(workshop?.pix_discount_percentage); if (Number.isFinite(value) && value >= 0 && value <= 100) setPixDiscountPercentage(value);
+    }
+    void loadPixDiscount();
+  }, []);
 
   async function print() {
     setMessage("");
