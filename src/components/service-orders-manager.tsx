@@ -6,7 +6,7 @@ import { OrderItemsPanel } from "@/components/order-items-panel";
 import { PrintDocument } from "@/components/print-document";
 import { AttachmentsManager } from "@/components/attachments-manager";
 
-type Client = { id: string; full_name: string };
+type Client = { id: string; full_name: string; phone: string | null; whatsapp: string | null };
 type Vehicle = { id: string; client_id: string; brand: string; model: string; plate: string | null };
 type Order = { id: string; number: number; client_id: string; vehicle_id: string; status: string; customer_complaint: string; diagnosis: string | null; notes: string | null; clients: Client | null; vehicles: Vehicle | null };
 type OrderItem = { description: string; quantity: number; unit_price: number; discount: number };
@@ -31,12 +31,13 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const orderTotal = orderItems.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price) - Number(item.discount || 0), 0);
 
   async function load() {
     const [clientResult, vehicleResult, orderResult, requestResult] = await Promise.all([
-      db.from("clients").select("id,full_name").eq("workshop_id", workshopId),
+      db.from("clients").select("id,full_name,phone,whatsapp").eq("workshop_id", workshopId),
       db.from("vehicles").select("id,client_id,brand,model,plate").eq("workshop_id", workshopId),
-      db.from("service_orders").select("id,number,client_id,vehicle_id,status,customer_complaint,diagnosis,notes,clients(id,full_name),vehicles(id,client_id,brand,model,plate)").eq("workshop_id", workshopId).order("opened_at", { ascending: false }),
+      db.from("service_orders").select("id,number,client_id,vehicle_id,status,customer_complaint,diagnosis,notes,clients(id,full_name,phone,whatsapp),vehicles(id,client_id,brand,model,plate)").eq("workshop_id", workshopId).order("opened_at", { ascending: false }),
       db.from("service_requests").select("id,client_id,vehicle_id,owner_id,complaint,status,created_at,clients(id,full_name),vehicles(id,client_id,brand,model,plate)").eq("workshop_id", workshopId).eq("status", "requested").order("created_at", { ascending: false }),
     ]);
     setClients((clientResult.data || []) as Client[]);
@@ -48,13 +49,23 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
   useEffect(() => { void load(); }, []);
   const allowed = vehicles.filter((item) => item.client_id === client);
 
+  function sendWhatsApp() {
+    if (!selected) return;
+    const contact = selected.clients?.whatsapp || selected.clients?.phone;
+    const number = (contact || "").replace(/\D/g, "");
+    if (!number) { setMessage("Cadastre o WhatsApp ou telefone do cliente antes de enviar."); return; }
+    const international = number.startsWith("55") ? number : `55${number}`;
+    const text = `Olá, ${selected.clients?.full_name || "cliente"}! A O.S. #${selected.number} foi atualizada. Valor atual: R$ ${orderTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}. Vou enviar o PDF em seguida.`;
+    window.open(`https://wa.me/${international}?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+  }
+
   async function save(event: FormEvent) {
     event.preventDefault();
     if (saving) return;
     setSaving(true);
     setMessage("Aguarde, salvando a O.S…");
     const payload = { workshop_id: workshopId, client_id: client, vehicle_id: vehicle, status, customer_complaint: complaint, diagnosis: diagnosis || null, notes: note || null };
-    const selection = "id,number,client_id,vehicle_id,status,customer_complaint,diagnosis,notes,clients(id,full_name),vehicles(id,client_id,brand,model,plate)";
+    const selection = "id,number,client_id,vehicle_id,status,customer_complaint,diagnosis,notes,clients(id,full_name,phone,whatsapp),vehicles(id,client_id,brand,model,plate)";
     const result = selected
       ? await db.from("service_orders").update(payload).eq("id", selected.id).select(selection).single()
       : await db.from("service_orders").insert(payload).select(selection).single();
@@ -105,11 +116,11 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
 
   return <div className="grid gap-7 xl:grid-cols-[420px_1fr]">
     <form ref={formRef} onSubmit={save} className="rounded-xl border border-zinc-800 bg-[#1A1A1A] p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">{selected ? `Editando O.S. #${selected.number}` : "Nova O.S."}</h2>{selected && <PrintDocument type="Ordem de Serviço" number={`#${selected.number}`} client={selected.clients?.full_name || "Cliente"} vehicle={`${selected.vehicles?.brand || ""} ${selected.vehicles?.model || ""} ${selected.vehicles?.plate || ""}`} status={states.find((item) => item[0] === status)?.[1] || status} note={note || complaint} items={orderItems} />}</div>
+      <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">{selected ? `Editando O.S. #${selected.number}` : "Nova O.S."}</h2>{selected && <div className="flex flex-wrap gap-2"><PrintDocument type="Ordem de Serviço" number={`#${selected.number}`} client={selected.clients?.full_name || "Cliente"} vehicle={`${selected.vehicles?.brand || ""} ${selected.vehicles?.model || ""} ${selected.vehicles?.plate || ""}`} status={states.find((item) => item[0] === status)?.[1] || status} note={note || complaint} items={orderItems} /><button type="button" onClick={sendWhatsApp} className="rounded-lg border border-emerald-500/70 px-4 py-2 text-sm font-bold text-emerald-300">Enviar no WhatsApp</button></div>}</div>
       <div className="mt-4 grid gap-3"><select required className="field" value={client} onChange={(event) => { setClient(event.target.value); setVehicle(""); }}><option value="">Cliente *</option>{clients.map((item) => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select><select required className="field" disabled={!client} value={vehicle} onChange={(event) => setVehicle(event.target.value)}><option value="">Veículo *</option>{allowed.map((item) => <option key={item.id} value={item.id}>{item.brand} {item.model} {item.plate ? `(${item.plate})` : ""}</option>)}</select><select className="field" value={status} onChange={(event) => setStatus(event.target.value)}>{states.map((item) => <option key={item[0]} value={item[0]}>{item[1]}</option>)}</select><textarea required className="field min-h-24" placeholder="Reclamação do cliente" value={complaint} onChange={(event) => setComplaint(event.target.value)} /><textarea className="field" placeholder="Diagnóstico" value={diagnosis} onChange={(event) => setDiagnosis(event.target.value)} /><textarea className="field" placeholder="Observações" value={note} onChange={(event) => setNote(event.target.value)} /></div>
       <div className="mt-4 flex flex-wrap gap-3"><button disabled={saving} className="rounded-lg bg-[#FFC107] px-4 py-2 font-bold text-black disabled:cursor-wait disabled:opacity-60">{saving ? "Salvando…" : "Salvar O.S."}</button><a href="/app" className="rounded-lg border border-zinc-600 px-4 py-2 font-bold text-zinc-100">Voltar ao menu</a></div>
       {message && <p className="mt-3 text-sm text-[#FFC107]">{message}</p>}
-      {selected && <><OrderItemsPanel workshopId={workshopId} orderId={selected.id} status={status} /><AttachmentsManager workshopId={workshopId} orderId={selected.id} /></>}
+      {selected && <><p className="mt-4 rounded-lg border border-[#6b510d] bg-[#211805] p-3 text-sm text-[#FFC107]">Valor atual da O.S.: <b>R$ {orderTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>. Gere o PDF e, em seguida, use o WhatsApp para encaminhá-lo ao cliente.</p><OrderItemsPanel workshopId={workshopId} orderId={selected.id} status={status} onItemsChange={setOrderItems} /><AttachmentsManager workshopId={workshopId} orderId={selected.id} /></>}
     </form>
     <section><div className="rounded-xl border border-[#FFC107]/60 bg-[#211805] p-5"><h2 className="text-xl font-semibold text-[#FFC107]">Solicitações dos clientes</h2><p className="mt-1 text-sm text-zinc-300">Aceite para criar a O.S. e iniciar o orçamento. O cliente recebe a confirmação no aplicativo.</p><div className="mt-4 space-y-3">{requests.length === 0 && <p className="text-sm text-zinc-400">Nenhuma solicitação nova.</p>}{requests.map((request) => <article key={request.id} className="rounded-lg border border-[#6b510d] bg-black/30 p-4"><b>{request.clients?.full_name || "Cliente"}</b><small className="mt-1 block text-zinc-400">{request.vehicles?.brand} {request.vehicles?.model} · {request.vehicles?.plate || "sem placa"}</small><p className="mt-3 text-sm text-zinc-200">{request.complaint}</p><div className="mt-4 flex flex-wrap gap-3"><button type="button" disabled={saving} onClick={() => void acceptRequest(request)} className="rounded-lg bg-[#FFC107] px-4 py-2 font-bold text-black disabled:opacity-60">Aceitar e criar O.S.</button><button type="button" disabled={saving} onClick={() => void declineRequest(request)} className="rounded-lg border border-red-500/70 px-4 py-2 font-bold text-red-300 disabled:opacity-60">Recusar</button></div></article>)}</div></div><h2 className="mt-7 text-xl font-semibold">Ordens de serviço</h2><p className="mt-1 text-sm text-zinc-400">Toque em Editar O.S. para abrir o atendimento e fazer alterações.</p><div className="mt-4 space-y-3">{orders.map((order) => <article key={order.id} className="rounded-xl border border-zinc-800 bg-[#171717] p-4"><div className="flex flex-wrap justify-between gap-3"><span><b>O.S. #{order.number}</b> · {order.clients?.full_name}<br /><small className="text-zinc-500">{order.vehicles?.brand} {order.vehicles?.model} · {order.vehicles?.plate || "sem placa"}</small></span><b className={order.status === "cancelled" ? "text-red-400" : order.status === "repairing" || order.status === "finished" || order.status === "delivered" ? "text-emerald-400" : "text-[#FFC107]"}>{states.find((item) => item[0] === order.status)?.[1]}</b></div><div className="mt-4 flex flex-wrap gap-3"><button type="button" onClick={() => void edit(order)} className="rounded-lg bg-[#FFC107] px-4 py-2 font-bold text-black">Editar O.S.</button><button type="button" onClick={() => void remove(order)} className="rounded-lg border border-red-500/70 px-4 py-2 font-bold text-red-300">Excluir O.S.</button></div></article>)}</div></section>
   </div>;
