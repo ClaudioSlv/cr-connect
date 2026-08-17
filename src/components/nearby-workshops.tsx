@@ -22,6 +22,7 @@ export function NearbyWorkshops() {
   const [items, setItems] = useState<Workshop[]>([]);
   const [message, setMessage] = useState("Use sua localizacao para encontrar oficinas ativas.");
   const [loading, setLoading] = useState(false);
+  const [locationBlocked, setLocationBlocked] = useState(false);
   const [position, setPosition] = useState<{ latitude: number; longitude: number } | null>(null);
   const [selected, setSelected] = useState<Workshop | null>(null);
   const [sent, setSent] = useState<SentRequest | null>(null);
@@ -69,6 +70,7 @@ export function NearbyWorkshops() {
 
   function locate() {
     if (!navigator.geolocation) { setMessage("Seu navegador nao oferece GPS."); return; }
+    setLocationBlocked(false);
     setLoading(true); setMessage("Localizando você e buscando oficinas…");
     let finished = false;
     const finish = (text: string) => { if (finished) return; finished = true; setMessage(text); setLoading(false); };
@@ -86,7 +88,7 @@ export function NearbyWorkshops() {
         setPosition(current); setItems(list); finish(list.length ? "Oficinas encontradas perto de você. Toque no marcador dourado para escolher." : "Nenhuma oficina CR SOS ativa no seu raio agora.");
       } catch { finish("Não foi possível concluir a busca agora. Confira a internet e tente novamente."); }
       finally { window.clearTimeout(timeout); }
-    }, () => { window.clearTimeout(timeout); finish("Permita a localização para usar o CR SOS."); }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
+    }, (error) => { window.clearTimeout(timeout); if (error.code === error.PERMISSION_DENIED) { setLocationBlocked(true); finish("A localização está bloqueada neste navegador."); return; } finish(error.code === error.TIMEOUT ? "O GPS demorou para responder. Tente novamente em um local aberto." : "Não foi possível obter sua localização agora. Tente novamente."); }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
   }
 
   async function requestHelp(event: FormEvent) {
@@ -117,8 +119,9 @@ export function NearbyWorkshops() {
   }, [sent?.requestId]);
 
   return <div>
-    <button onClick={locate} disabled={loading} className="rounded-lg bg-[#FFC107] px-5 py-3 font-bold text-black disabled:opacity-60">{loading ? "Buscando..." : "Usar minha localizacao"}</button>
+    <button onClick={locate} disabled={loading} className="rounded-lg bg-[#FFC107] px-5 py-3 font-bold text-black disabled:opacity-60">{loading ? "Buscando..." : locationBlocked ? "Tentar localização novamente" : "Usar minha localizacao"}</button>
     <p className="mt-4 text-zinc-400">{message}</p>
+    {locationBlocked && <div className="mt-4 rounded-xl border border-[#6b510d] bg-[#211805] p-4 text-sm text-zinc-200"><b className="text-[#FFC107]">Como liberar a localização</b><p className="mt-2">No navegador, toque no ícone ao lado do endereço do CR Connect, abra <b>Permissões</b> e escolha <b>Localização: permitir</b>. Depois volte aqui e toque em “Tentar localização novamente”.</p></div>}
     {sent && <section className="mt-5 rounded-xl border border-[#FFC107] bg-[#211805] p-5"><p className="font-bold text-[#FFC107]">Mensagem enviada para {sent.workshop.name}</p><p className="mt-2 text-sm text-zinc-200">{notice || (viewed ? "A oficina visualizou sua mensagem e ja sabe que voce precisa de ajuda." : "A oficina recebeu seus dados. Aguarde a confirmacao de leitura.")}</p>{status === "accepted" && <div className="mt-4 rounded-xl border border-[#6b510d] bg-black/20 p-4"><p className="font-semibold text-[#FFC107]">A oficina aceitou. Informe um ponto de referencia.</p><p className="mt-1 text-sm text-zinc-300">Ex.: km da rodovia, posto, rua, sentido da pista ou outro detalhe para a oficina chegar ate voce.</p><textarea value={reference} onChange={(event) => setReference(event.target.value)} maxLength={250} className="field mt-3 min-h-24" placeholder="Onde exatamente voce esta?"/><div className="mt-3 flex flex-wrap gap-3"><button type="button" disabled={savingReference} onClick={() => void sendReference()} className="rounded-lg bg-[#FFC107] px-4 py-2 font-bold text-black disabled:opacity-60">{savingReference ? "Enviando..." : "Enviar detalhe"}</button>{sent.workshop.whatsapp && <a href={whatsappLink(sent.workshop, reference)} target="_blank" rel="noreferrer" className="rounded-lg border border-green-500 px-4 py-2 font-bold text-green-400">Enviar pelo WhatsApp</a>}</div>{referenceNotice && <p className="mt-3 text-sm text-[#FFC107]">{referenceNotice}</p>}</div>}<div className="mt-4 flex flex-wrap gap-3">{sent.workshop.whatsapp && <a href={phoneLink(sent.workshop)} className="rounded-lg bg-[#FFC107] px-4 py-2 font-bold text-black">Ligar para a oficina</a>}{sent.workshop.whatsapp && <a href={whatsappLink(sent.workshop)} target="_blank" rel="noreferrer" className="rounded-lg border border-green-500 px-4 py-2 font-bold text-green-400">WhatsApp</a>}</div></section>}
     {position && items.length > 0 && <SosMap position={position} workshops={items} onChoose={choose} />}
     <div className="mt-6 space-y-3">{items.map((item) => <article key={item.id} className="rounded-xl border border-zinc-800 bg-[#171717] p-5"><div className="flex flex-wrap justify-between gap-4"><div><h2 className="text-lg font-bold">{item.name}</h2><p className="mt-1 text-sm text-zinc-400">{item.emergency_services.join(" - ")}</p><b className="mt-3 block text-[#FFC107]">{item.distance?.toFixed(1)} km de voce</b></div><div className="flex h-fit flex-wrap gap-2"><button onClick={() => choose(item)} className="rounded-lg bg-[#FFC107] px-4 py-2 font-bold text-black">Pedir ajuda</button>{item.whatsapp && <a className="rounded-lg border border-green-500 px-4 py-2 font-bold text-green-400" href={whatsappLink(item)} target="_blank" rel="noreferrer">WhatsApp</a>}<a className="rounded-lg border border-[#FFC107] px-4 py-2 font-bold text-[#FFC107]" href={mapsLink(item)} target="_blank" rel="noreferrer">Abrir rota</a></div></div></article>)}</div>
