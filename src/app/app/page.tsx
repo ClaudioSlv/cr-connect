@@ -19,6 +19,13 @@ const shortcuts = [
   { title: "Configurações", description: "Ajustes da oficina", href: "/app/configuracoes", icon: "⚙" },
 ];
 
+const quickActions = [
+  { title: "Nova O.S.", href: "/app/ordens", icon: "+" },
+  { title: "Novo cliente", href: "/app/clientes", icon: "CL" },
+  { title: "Orçamento", href: "/app/orcamentos", icon: "R$" },
+  { title: "CR SOS", href: "/app/cr-sos", icon: "SOS" },
+];
+
 export default async function AppHome() {
   const db = await createClient();
   const { data: { user } } = await db.auth.getUser();
@@ -42,27 +49,25 @@ export default async function AppHome() {
   const stats = [["Clientes", clientsCount || 0, "CL"], ["Veículos", vehiclesCount || 0, "VE"], ["O.S. abertas", ordersCount || 0, "OS"], ["Itens em estoque", productsCount || 0, "ES"]];
 
   return <AppShell workshop={workshop.name}>
-    <section className="relative overflow-hidden rounded-3xl border border-zinc-800 bg-black p-6 shadow-2xl sm:p-8">
-      <Image src="/brand/cr-connect-hero.png" fill sizes="(max-width: 768px) 100vw, 900px" alt="Carro em destaque" className="object-cover object-[72%_center] opacity-75" />
-      <div className="absolute inset-0 bg-gradient-to-r from-black via-black/90 to-black/15" />
-      <div className="relative z-10 max-w-xl">
-        <p className="text-sm font-bold tracking-[.2em] text-[#FFC107]">VISÃO GERAL</p>
-        <h1 className="mt-4 text-4xl font-black leading-tight text-white sm:text-5xl">Olá, {workshop.name}!</h1>
-        <p className="mt-4 text-lg text-zinc-300">Escolha um módulo para começar.</p>
-        <Link href="/app/relatorios" className="mt-7 inline-flex items-center gap-3 rounded-xl bg-[#FFC107] px-5 py-3 font-black text-black">▥ Ver resumo <span className="text-xl">›</span></Link>
-      </div>
-    </section>
+    <div className="mx-auto max-w-6xl pb-24 md:pb-4">
+      <header className="-mt-11 flex items-center gap-3 pr-14 md:mt-0 md:pr-0">
+        <Image src="/brand/cr-reparador.jpg" width={44} height={44} alt="CR Reparador" className="rounded-xl border border-[#FFC107]/70 md:hidden" />
+        <div className="min-w-0"><p className="text-xs font-bold tracking-[.18em] text-[#FFC107]">BEM-VINDO</p><h1 className="truncate text-xl font-black text-white sm:text-2xl">{workshop.name}</h1></div>
+      </header>
 
-    <section className="mt-6 grid gap-4 sm:grid-cols-2">
-      {shortcuts.map((item) => <Link href={item.href} key={item.href} className="group flex min-h-36 items-center gap-4 rounded-2xl border border-zinc-800 bg-[#181818] p-5 transition hover:-translate-y-0.5 hover:border-[#FFC107] hover:bg-[#201b10]">
-        <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-zinc-800 text-sm font-black text-[#FFC107]">{item.icon}</span>
-        <span className="min-w-0 flex-1"><b className="block text-xl text-white">{item.title}</b><span className="mt-1 block text-sm text-zinc-400">{item.description}</span><span className="mt-3 block text-sm font-bold text-[#FFC107]">Abrir <span className="ml-1">→</span></span></span>
-        <span className="grid h-9 w-9 place-items-center rounded-full border border-zinc-600 text-xl text-zinc-200 transition group-hover:border-[#FFC107] group-hover:text-[#FFC107]">›</span>
-      </Link>)}
-    </section>
+      <section className="relative mt-6 overflow-hidden rounded-[1.75rem] border border-[#6b510d] bg-[#17130a] p-6 shadow-2xl sm:p-8">
+        <Image src="/brand/cr-connect-hero.png" fill priority sizes="(max-width: 768px) 100vw, 900px" alt="Oficina CR Connect" className="object-cover object-[75%_center] opacity-35" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#161006] via-[#161006]/95 to-black/20" />
+        <div className="relative z-10 max-w-lg"><span className="inline-flex rounded-full border border-[#FFC107]/40 bg-black/40 px-3 py-1 text-xs font-black tracking-[.16em] text-[#FFC107]">CENTRAL DA OFICINA</span><h2 className="mt-4 text-3xl font-black leading-tight text-white sm:text-4xl">O que vamos resolver hoje?</h2><p className="mt-3 max-w-sm text-sm leading-6 text-zinc-300 sm:text-base">Abra um atendimento e acompanhe o serviço do diagnóstico até a entrega.</p><Link href="/app/ordens" className="mt-6 inline-flex items-center gap-3 rounded-2xl bg-[#FFC107] px-6 py-4 font-black text-black shadow-lg shadow-black/30 transition hover:bg-[#ffd23b]">Criar nova O.S. <span className="text-xl">→</span></Link></div>
+      </section>
 
-    <section className="mt-6 grid grid-cols-2 gap-3 rounded-2xl border border-zinc-800 bg-[#151515] p-3 sm:grid-cols-4">
-      {stats.map(([label, value, icon]) => <div key={label as string} className="flex items-center gap-3 rounded-xl px-3 py-3"><span className="text-xs font-black text-[#FFC107]">{icon}</span><span><b className="block text-xl leading-none">{value}</b><span className="mt-1 block text-xs text-zinc-400">{label}</span></span></div>)}
-    </section>
+      <section className="mt-7"><div className="flex items-end justify-between gap-3"><div><p className="text-xs font-black tracking-[.16em] text-[#FFC107]">ACESSO RÁPIDO</p><h2 className="mt-1 text-xl font-black text-white">Ações do dia</h2></div><Link href="/app/relatorios" className="text-sm font-bold text-[#FFC107]">Ver resumo →</Link></div><div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">{quickActions.map((item) => <Link href={item.href} key={item.title} className="group rounded-2xl border border-zinc-800 bg-[#181818] p-4 transition hover:-translate-y-0.5 hover:border-[#FFC107]"><span className="grid h-11 w-11 place-items-center rounded-xl bg-[#292929] text-xs font-black text-[#FFC107] group-hover:bg-[#FFC107] group-hover:text-black">{item.icon}</span><b className="mt-4 block text-sm text-white sm:text-base">{item.title}</b><span className="mt-2 block text-xs font-bold text-[#FFC107]">Acessar →</span></Link>)}</div></section>
+
+      <section className="mt-7 overflow-hidden rounded-3xl border border-zinc-800 bg-[#151515]"><div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4"><div><p className="text-xs font-black tracking-[.16em] text-[#FFC107]">HOJE NA OFICINA</p><h2 className="mt-1 text-xl font-black">Visão geral</h2></div><Link href="/app/relatorios" aria-label="Abrir relatórios" className="grid h-10 w-10 place-items-center rounded-full border border-zinc-700 text-xl text-zinc-300">›</Link></div><div className="grid grid-cols-2 sm:grid-cols-4">{stats.map(([label, value, icon], index) => <Link href={icon === "CL" ? "/app/clientes" : icon === "VE" ? "/app/veiculos" : icon === "OS" ? "/app/ordens" : "/app/estoque"} key={label as string} className={`p-5 ${index % 2 === 0 ? "border-r" : ""} ${index < 2 ? "border-b sm:border-b-0" : ""} border-zinc-800 sm:border-r sm:last:border-r-0`}><span className="text-xs font-black text-[#FFC107]">{icon}</span><b className="mt-3 block text-3xl leading-none text-white">{value}</b><span className="mt-2 block text-xs text-zinc-400">{label}</span></Link>)}</div></section>
+
+      <section className="mt-7"><div className="flex items-center justify-between"><div><p className="text-xs font-black tracking-[.16em] text-[#FFC107]">SERVIÇOS</p><h2 className="mt-1 text-xl font-black">Gestão da oficina</h2></div></div><div className="mt-4 grid gap-3 sm:grid-cols-2">{shortcuts.map((item) => <Link href={item.href} key={item.href} className="group flex items-center gap-4 rounded-2xl border border-zinc-800 bg-[#181818] p-4 transition hover:border-[#FFC107] hover:bg-[#201b10]"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[#292929] text-xs font-black text-[#FFC107]">{item.icon}</span><span className="min-w-0 flex-1"><b className="block text-base text-white">{item.title}</b><span className="mt-1 block truncate text-sm text-zinc-400">{item.description}</span></span><span className="grid h-9 w-9 place-items-center rounded-full border border-zinc-700 text-lg text-zinc-300 group-hover:border-[#FFC107] group-hover:text-[#FFC107]">›</span></Link>)}</div></section>
+    </div>
+
+    <nav aria-label="Navegação principal" className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 rounded-2xl border border-zinc-700 bg-[#111]/95 p-2 shadow-2xl backdrop-blur md:hidden"><Link href="/app" className="flex flex-col items-center gap-1 rounded-xl bg-[#29230f] py-2 text-[10px] font-bold text-[#FFC107]"><span className="text-lg">⌂</span>Início</Link><Link href="/app/ordens" className="flex flex-col items-center gap-1 py-2 text-[10px] font-bold text-zinc-400"><span className="text-base">OS</span>Ordens</Link><Link href="/app/ordens" aria-label="Criar nova ordem de serviço" className="mx-auto grid h-12 w-12 -translate-y-4 place-items-center rounded-full border-4 border-[#111] bg-[#FFC107] text-2xl font-black text-black shadow-lg">+</Link><Link href="/app/clientes" className="flex flex-col items-center gap-1 py-2 text-[10px] font-bold text-zinc-400"><span className="text-base">CL</span>Clientes</Link><Link href="/app/chat" className="flex flex-col items-center gap-1 py-2 text-[10px] font-bold text-zinc-400"><span className="text-base">CH</span>Chat</Link></nav>
   </AppShell>;
 }
