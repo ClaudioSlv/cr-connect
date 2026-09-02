@@ -28,7 +28,7 @@ export function DtcLookup() {
       <h2 className="text-xl font-bold">Consultar código DTC</h2>
       <p className="mt-2 text-sm leading-6 text-zinc-400">Informe o veículo e o código apresentado pelo scanner.</p>
       <label className="mt-5 block text-sm font-bold text-zinc-200">Veículo<input required className="field mt-2" placeholder="Ex.: Hyundai HB20 2014 1.0" value={vehicle} onChange={(event) => setVehicle(event.target.value)} /></label>
-      <label className="mt-4 block text-sm font-bold text-zinc-200">Código DTC<input required className="field mt-2 uppercase" autoCapitalize="characters" autoCorrect="off" spellCheck={false} maxLength={8} placeholder="Ex.: C1208" value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} /></label>
+      <label className="mt-4 block text-sm font-bold text-zinc-200">Código DTC<input required className="field mt-2 uppercase" autoCapitalize="characters" autoCorrect="off" spellCheck={false} maxLength={5} placeholder="Ex.: C1208" value={code} onChange={(event) => { setCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5)); setError(""); }} /><span className="mt-2 block text-xs font-normal text-zinc-500">Formato: uma letra e quatro caracteres. Ex.: P0304.</span></label>
       <button disabled={loading} className="mt-5 w-full rounded-xl bg-[#FFC107] px-5 py-3 font-black text-black disabled:opacity-60">{loading ? "Consultando..." : "Consultar código"}</button>
     </form>
     <section className="rounded-2xl border border-[#4a3818] bg-[#171717] p-5">

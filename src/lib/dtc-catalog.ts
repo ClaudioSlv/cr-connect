@@ -7,5 +7,13 @@ const references: Record<string, DtcReference> = {
   P0420: { code: "P0420", title: "Eficiência do catalisador abaixo do limite", meaning: "O monitor detectou baixa eficiência do catalisador no banco 1.", causes: ["Catalisador degradado", "Falha de combustão ou mistura", "Vazamento no escape", "Sondas lambda"], tests: ["Corrigir primeiro falhas de ignição e mistura", "Inspecionar vazamentos", "Comparar sinais das sondas", "Avaliar temperatura e contrapressão"], warning: "Não condene o catalisador sem testar as causas que podem tê-lo danificado." },
 };
 
-export function findDtcReference(code: string) { return references[code.trim().toUpperCase()] || null; }
+export function findDtcReference(code: string) {
+  const normalized = code.trim().toUpperCase();
+  if (references[normalized]) return references[normalized];
+  const singleDigitMisfire = normalized.match(/^P030([1-9])$/);
+  const doubleDigitMisfire = normalized.match(/^P03(10|11|12)$/);
+  const cylinder = singleDigitMisfire?.[1] || doubleDigitMisfire?.[1];
+  if (cylinder) return { code: normalized, title: `Falha de combustão no cilindro ${cylinder}`, meaning: `A central detectou falhas de combustão concentradas no cilindro ${cylinder}.`, causes: ["Vela desgastada, contaminada ou com folga incorreta", "Bobina ou cabo de ignição", "Injetor, conector ou chicote", "Baixa compressão", "Entrada falsa de ar próxima ao cilindro"], tests: ["Consultar o contador de falhas no scanner", "Inspecionar a vela e permutar a bobina com outro cilindro", "Verificar pulso e vazão do injetor", "Realizar teste de compressão e estanqueidade", "Conferir chicotes, conectores e entrada de ar"], warning: "Se a luz de injeção estiver piscando, evite circular para não danificar o catalisador." };
+  return null;
+}
 export function formatDtcReference(reference: DtcReference, vehicle?: string) { return [`${reference.code} — ${reference.title}`, vehicle ? `Veículo: ${vehicle}` : "", "", "Significado", reference.meaning, "", "Causas prováveis", ...reference.causes.map((item, index) => `${index + 1}. ${item}`), "", "Testes recomendados", ...reference.tests.map((item, index) => `${index + 1}. ${item}`), "", "Atenção", reference.warning].filter(Boolean).join("\n"); }
