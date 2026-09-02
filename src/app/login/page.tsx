@@ -15,7 +15,10 @@ export default function LoginPage() {
   useEffect(() => {
     setCreatingAccount(new URLSearchParams(window.location.search).get("novo") === "1");
     const db = createClient();
-    db.auth.getUser().then(({ data: { user } }) => {
+    Promise.all([
+      db.auth.getUser(),
+      new Promise((resolve) => window.setTimeout(resolve, 1200)),
+    ]).then(([{ data: { user } }]) => {
       if (user) window.location.replace("/app");
       else setBusy(false);
     });
@@ -55,7 +58,7 @@ export default function LoginPage() {
     setEmailSent(true);
   }
 
-  if (busy && !notice && !emailSent) return <main className="grid min-h-screen place-items-center bg-[#0E0E0E] p-6 text-zinc-400">Verificando acesso…</main>;
+  if (busy && !notice && !emailSent) return <main className="relative min-h-screen overflow-hidden bg-black"><Image src="/brand/cr-reparador-splash.jpg" fill priority sizes="100vw" alt="CR Reparador Automotivo · carregando" className="object-contain" /></main>;
 
   if (emailSent) return (
     <main className="grid min-h-screen place-items-center bg-[#0E0E0E] p-6">
