@@ -8,17 +8,6 @@ import { OwnerPortalShortcut } from "@/components/owner-portal-shortcut";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
-const shortcuts = [
-  { title: "Clientes", description: "Ver e cadastrar clientes", href: "/app/clientes", icon: "CL" },
-  { title: "Veículos", description: "Ver e cadastrar veículos", href: "/app/veiculos", icon: "VE" },
-  { title: "Ordens de serviço", description: "Criar e acompanhar O.S.", href: "/app/ordens", icon: "OS" },
-  { title: "Estoque", description: "Gerenciar peças e produtos", href: "/app/estoque", icon: "ES" },
-  { title: "Orçamentos", description: "Criar e enviar propostas", href: "/app/orcamentos", icon: "OR" },
-  { title: "Mensagens", description: "Converse com seus clientes", href: "/app/chat", icon: "CH" },
-  { title: "Relatórios", description: "Visualize indicadores", href: "/app/relatorios", icon: "RE" },
-  { title: "Configurações", description: "Ajustes da oficina", href: "/app/configuracoes", icon: "⚙" },
-];
-
 const quickActions = [
   { title: "Nova O.S.", href: "/app/ordens", icon: "+" },
   { title: "Novo cliente", href: "/app/clientes", icon: "CL" },
@@ -65,7 +54,6 @@ export default async function AppHome() {
 
       <section className="mt-7 overflow-hidden rounded-3xl border border-zinc-800 bg-[#151515]"><div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4"><div><p className="text-xs font-black tracking-[.16em] text-[#FFC107]">HOJE NA OFICINA</p><h2 className="mt-1 text-xl font-black">Visão geral</h2></div><Link href="/app/relatorios" aria-label="Abrir relatórios" className="grid h-10 w-10 place-items-center rounded-full border border-zinc-700 text-xl text-zinc-300">›</Link></div><div className="grid grid-cols-2 sm:grid-cols-4">{stats.map(([label, value, icon], index) => <Link href={icon === "CL" ? "/app/clientes" : icon === "VE" ? "/app/veiculos" : icon === "OS" ? "/app/ordens" : "/app/estoque"} key={label as string} className={`p-5 ${index % 2 === 0 ? "border-r" : ""} ${index < 2 ? "border-b sm:border-b-0" : ""} border-zinc-800 sm:border-r sm:last:border-r-0`}><span className="text-xs font-black text-[#FFC107]">{icon}</span><b className="mt-3 block text-3xl leading-none text-white">{value}</b><span className="mt-2 block text-xs text-zinc-400">{label}</span></Link>)}</div></section>
 
-      <section className="mt-7"><div className="flex items-center justify-between"><div><p className="text-xs font-black tracking-[.16em] text-[#FFC107]">SERVIÇOS</p><h2 className="mt-1 text-xl font-black">Gestão da oficina</h2></div></div><div className="mt-4 grid gap-3 sm:grid-cols-2">{shortcuts.map((item) => <Link href={item.href} key={item.href} className="group flex items-center gap-4 rounded-2xl border border-zinc-800 bg-[#181818] p-4 transition hover:border-[#FFC107] hover:bg-[#201b10]"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[#292929] text-xs font-black text-[#FFC107]">{item.icon}</span><span className="min-w-0 flex-1"><b className="block text-base text-white">{item.title}</b><span className="mt-1 block truncate text-sm text-zinc-400">{item.description}</span></span><span className="grid h-9 w-9 place-items-center rounded-full border border-zinc-700 text-lg text-zinc-300 group-hover:border-[#FFC107] group-hover:text-[#FFC107]">›</span></Link>)}</div></section>
     </div>
 
     <nav aria-label="Navegação principal" className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 rounded-2xl border border-zinc-700 bg-[#111]/95 p-2 shadow-2xl backdrop-blur md:hidden"><Link href="/app" className="flex flex-col items-center gap-1 rounded-xl bg-[#29230f] py-2 text-[10px] font-bold text-[#FFC107]"><span className="text-lg">⌂</span>Início</Link><Link href="/app/ordens" className="flex flex-col items-center gap-1 py-2 text-[10px] font-bold text-zinc-400"><span className="text-base">OS</span>Ordens</Link><Link href="/app/ordens" aria-label="Criar nova ordem de serviço" className="mx-auto grid h-12 w-12 -translate-y-4 place-items-center rounded-full border-4 border-[#111] bg-[#FFC107] text-2xl font-black text-black shadow-lg">+</Link><Link href="/app/clientes" className="flex flex-col items-center gap-1 py-2 text-[10px] font-bold text-zinc-400"><span className="text-base">CL</span>Clientes</Link><Link href="/app/chat" className="flex flex-col items-center gap-1 py-2 text-[10px] font-bold text-zinc-400"><span className="text-base">CH</span>Chat</Link></nav>
