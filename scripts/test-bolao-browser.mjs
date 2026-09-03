@@ -2,7 +2,7 @@
 // the final worker check uses a real local Service Worker, not remote push delivery.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -10,8 +10,7 @@ const base = process.env.BOLAO_TEST_URL || "http://localhost:3010";
 const chromePath = process.env.CHROME_PATH || "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const profilePrefix = path.join(tmpdir(), "bolao-browser-test-");
 const profile = await mkdtemp(profilePrefix);
-const port = 9224;
-const chrome = spawn(chromePath, ["--headless=new", "--disable-gpu", "--no-first-run", "--disable-extensions", `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, "about:blank"], { windowsHide: true, stdio: "ignore" });
+const chrome = spawn(chromePath, ["--headless=new", "--disable-gpu", "--no-first-run", "--disable-extensions", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank"], { windowsHide: true, stdio: "ignore" });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let socket;
 let command;
@@ -20,6 +19,10 @@ try {
   let debuggerTab;
   for (let attempt = 0; attempt < 40; attempt++) {
     try {
+      // Read only this freshly-created profile's port; never attach to someone
+      // else's browser or test process that happens to use a fixed debug port.
+      const port = Number((await readFile(path.join(profile, "DevToolsActivePort"), "utf8")).split(/\r?\n/)[0]);
+      assert.ok(Number.isInteger(port) && port > 0 && port < 65536);
       debuggerTab = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: "PUT" })).json();
       break;
     } catch { await sleep(250); }
