@@ -1,0 +1,12 @@
+{
+  "id": "/bolao",
+  "name": "Bolão Mega da Virada 2026",
+  "short_name": "Mega da Virada",
+  "description": "Contagem regressiva e lembretes da abertura dos pagamentos.",
+  "start_url": "/bolao",
+  "scope": "/bolao",
+  "display": "standalone",
+  "background_color": "#020503",
+  "theme_color": "#020503",
+  "lang": "pt-BR"
+}

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
 import MegaVirada2026Page from "../mega-virada-2026/page";
+import { BolaoReminderPrompt } from "@/components/bolao-reminder-prompt";
 
 const pageUrl = "https://cr-connect-ic3w.vercel.app/bolao";
 const ogImageUrl =
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
   title: previewTitle,
   description: previewDescription,
   applicationName: "Mega da Virada 2026",
-  manifest: "/mega-virada-2026/manifest.webmanifest",
+  manifest: "/bolao/manifest.webmanifest",
   alternates: { canonical: pageUrl },
   appleWebApp: {
     capable: true,
@@ -52,4 +53,11 @@ export const viewport: Viewport = {
   colorScheme: "dark",
 };
 
-export default MegaVirada2026Page;
+export default function BolaoPage() {
+  return (
+    <div className="bg-[#020503] [&_dt]:text-[.75rem]! [&_dt]:font-extrabold! [&_dt]:text-[#FFFFFF]! min-[380px]:[&_dt]:text-[.8rem]!">
+      <MegaVirada2026Page />
+      <BolaoReminderPrompt />
+    </div>
+  );
+}
