@@ -2,23 +2,26 @@
 
 import { FormEvent, useState } from "react";
 
+type Source = { url: string; title: string };
+
 export function DtcLookup() {
   const [vehicle, setVehicle] = useState("");
   const [code, setCode] = useState("");
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState("");
+  const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(false);
 
   async function search(event: FormEvent) {
     event.preventDefault();
     const normalizedCode = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (!/^[PBCU][0-9A-F]{4}$/i.test(normalizedCode)) { setError("Informe um código DTC válido, como C1208 ou P0300."); return; }
-    setCode(normalizedCode); setLoading(true); setError(""); setAnswer("");
+    setCode(normalizedCode); setLoading(true); setError(""); setAnswer(""); setSources([]);
     try {
       const response = await fetch("/api/diagnostico-ia", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vehicle: vehicle.trim(), symptom: normalizedCode, mode: "dtc" }) });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) setError(data.error || "Não foi possível consultar esse código agora.");
-      else setAnswer(data.answer || "Nenhuma informação encontrada para esse código.");
+      else { setAnswer(data.answer || "Nenhuma informação encontrada para esse código."); setSources(Array.isArray(data.sources) ? data.sources : []); }
     } catch { setError("Não foi possível conectar ao serviço de consulta. Verifique sua internet e tente novamente."); }
     finally { setLoading(false); }
   }
@@ -36,6 +39,7 @@ export function DtcLookup() {
       {!answer && !error && <div className="mt-6 rounded-xl border border-dashed border-zinc-700 p-5 text-zinc-400"><p>O significado, as causas prováveis e os testes recomendados aparecerão aqui.</p><p className="mt-3 text-sm">Exemplo: <b className="text-zinc-200">Hyundai HB20 2014 · C1208</b></p></div>}
       {error && <p role="alert" className="mt-5 rounded-xl border border-red-500/50 bg-red-500/10 p-4 leading-6 text-red-300">{error}</p>}
       {answer && <p className="mt-5 whitespace-pre-wrap leading-7 text-zinc-200">{answer}</p>}
+      {sources.length > 0 && <div className="mt-6 border-t border-zinc-800 pt-4"><b className="text-sm text-[#FFC107]">Fontes consultadas</b><div className="mt-3 flex flex-wrap gap-2">{sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer" className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-300">{source.title} ↗</a>)}</div></div>}
       <p className="mt-6 border-t border-zinc-800 pt-4 text-xs leading-5 text-zinc-500">Confirme a definição específica no scanner e no manual do fabricante antes de substituir componentes.</p>
     </section>
   </div>;
