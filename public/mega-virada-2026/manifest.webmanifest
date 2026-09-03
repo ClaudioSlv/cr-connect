@@ -1,0 +1,10 @@
+{
+  "name": "Bolão Mega da Virada 2026",
+  "short_name": "Mega da Virada 2026",
+  "description": "Contagem regressiva para a abertura dos pagamentos do Bolão Mega da Virada 2026.",
+  "start_url": "/mega-virada-2026",
+  "display": "standalone",
+  "background_color": "#020503",
+  "theme_color": "#020503",
+  "lang": "pt-BR"
+}
