@@ -85,6 +85,18 @@ try {
     if (bootstrapId) await command("Page.removeScriptToEvaluateOnNewDocument", { identifier: bootstrapId });
     const source = `(() => {
       window.__pushTest = { calls: 0, registrations: [], unsubscribed: 0 };
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (...args) => {
+        if (args[0] === '/api/bolao/push-subscriptions' && !args[1]?.method && window.__pushTest.initializedAt === undefined) {
+          window.__pushTest.initializedAt = performance.now();
+        }
+        return originalFetch(...args);
+      };
+      new MutationObserver(() => {
+        if (document.querySelector('dialog[open]') && window.__pushTest.modalOpenedAt === undefined) {
+          window.__pushTest.modalOpenedAt = performance.now();
+        }
+      }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['open'] });
       ${mode === "after" ? "Date.now = () => 1791630001000;" : ""}
       ${mode === "unsupported" ? "delete window.PushManager;" : "window.PushManager = function() {};"}
       let active = false; try { active = Boolean(localStorage.getItem('bolao-2026-push-consent')); } catch {}
@@ -125,7 +137,14 @@ try {
   assert.equal(await evaluate("window.__pushTest.calls"), 0);
   const secondCount = await evaluate("document.querySelector('[aria-labelledby=\"countdown-title\"] [aria-live]').getAttribute('aria-label')");
   assert.notEqual(firstCount, secondCount);
-  await until(modalOpen, 5000);
+  await until("window.__pushTest.initializedAt !== undefined");
+  const elapsed = await evaluate("performance.now() - window.__pushTest.initializedAt");
+  await sleep(Math.max(0, 7500 - elapsed));
+  assert.equal(await evaluate(modalOpen), false, "The reminder must still be hidden before 8 seconds");
+  await until(modalOpen, 2000);
+  const promptDelay = await evaluate("window.__pushTest.modalOpenedAt - window.__pushTest.initializedAt");
+  // The fetch starts just after the effect's timestamp; allow a small measuring tolerance.
+  assert.ok(promptDelay >= 7950 && promptDelay < 9500, `Expected an 8s prompt, observed ${promptDelay}ms`);
   assert.equal(await evaluate("window.__pushTest.calls"), 0);
   const metrics = await evaluate(`({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth,
     labels: Array.from(document.querySelectorAll('dt')).map(el => { const s = getComputedStyle(el); return { color: s.color, size: parseFloat(s.fontSize), weight: s.fontWeight }; }),
@@ -148,9 +167,9 @@ try {
   }
   await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await navigate("/bolao");
-  await sleep(5500);
+  await sleep(8500);
   assert.equal(await evaluate(modalOpen), false);
-  results.push("390px: labels white/bold/larger; values gold; countdown ticking; 5s modal; no native permission before opt-in; dismissal persists");
+  results.push(`390px: labels white/bold/larger; values gold; countdown ticking; 8s modal (${Math.round(promptDelay)}ms); no native permission before opt-in; dismissal persists`);
 
   await clearStorage();
   await navigate("/bolao");
@@ -162,7 +181,7 @@ try {
   assert.ok(await evaluate("window.__pushTest.registrations.some(r => r.url === '/bolao-sw.js' && r.scope === '/bolao')"));
   await click("FECHAR");
   await navigate("/bolao");
-  await sleep(5500);
+  await sleep(8500);
   assert.equal(await evaluate(modalOpen), false);
   assert.ok(await evaluate("document.body.innerText.includes('✅ LEMBRETES ATIVADOS')"));
   await click("DESATIVAR LEMBRETES", false);
@@ -201,7 +220,7 @@ try {
   await clearStorage();
   await scenario("after");
   await navigate("/bolao");
-  await sleep(5500);
+  await sleep(8500);
   assert.equal(await evaluate(modalOpen), false);
   const opening = await evaluate("({label: document.querySelector('[aria-labelledby=\"countdown-title\"] [aria-live]').getAttribute('aria-label'), href: document.querySelector('a[href^=\"https://wa.me\"]')?.href})");
   assert.match(opening.label, /^0 dias, 0 horas, 0 minutos e 0 segundos$/);
@@ -210,7 +229,7 @@ try {
 
   await scenario();
   await navigate("/mega-virada-2026");
-  await sleep(5500);
+  await sleep(8500);
   assert.equal(await evaluate(modalOpen), false);
   assert.ok(await evaluate("parseFloat(getComputedStyle(document.querySelector('dt')).fontSize) < 12"));
   results.push("Original long route unchanged: original labels and no reminder modal");

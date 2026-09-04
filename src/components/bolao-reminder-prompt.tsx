@@ -129,7 +129,7 @@ export function BolaoReminderPrompt() {
         if (Date.now() >= PAYMENT_OPENING_TIME) { setBeforeOpening(false); return; }
         setMode(!capable ? "unsupported" : !config.available ? "unavailable" : "offer");
         setModal(true);
-      }, Math.max(0, 5_000 - (Date.now() - started)));
+      }, Math.max(0, 8_000 - (Date.now() - started)));
     }
     void initialize();
     return () => {

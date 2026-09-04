@@ -5,6 +5,8 @@
 Somente `/bolao` recebe labels brancos/maiores e o modal opcional. A página longa,
 o contador existente, valores, WhatsApp, SW e inscrições autenticadas do aplicativo
 não foram alterados. O worker `/bolao-sw.js` usa o escopo `/bolao`.
+O convite opcional aparece aproximadamente 8 segundos após a entrada na página,
+sem solicitar permissão nativa antes do clique de consentimento.
 
 ## Arquivos desta melhoria
 
@@ -55,7 +57,7 @@ estão temporariamente indisponíveis, sem pedir permissão nativa.
 ## Teste imediato, sem esperar a agenda
 
 1. Primeiro use um deploy Vercel **Preview**, com as variáveis de teste configuradas
-   e `BOLAO_REMINDERS_ENABLED=false`. Em Android/Chrome com HTTPS, abrir `/bolao`, aguardar 5 segundos e escolher
+   e `BOLAO_REMINDERS_ENABLED=false`. Em Android/Chrome com HTTPS, abrir `/bolao`, aguardar 8 segundos e escolher
    `QUERO RECEBER LEMBRETES`. Autorizar o prompt nativo.
 2. Confirmar `LEMBRETES ATIVADOS` e uma linha na tabela
    `bolao_push_subscriptions`. Copiar o `id` dessa inscrição de teste.
@@ -127,11 +129,24 @@ contagem pós-data aprovados. Uma notificação **local** do Service Worker foi
 exibida/consultada no Chrome de teste, e a repetição da mesma tag manteve só uma.
 O lint completo ainda aponta erros preexistentes em outras telas.
 
+Após o ajuste para 8 segundos, a suíte de navegador passou contra a versão local
+de produção (`next start`): convite medido em 8.050 ms, sem abrir antes de 8s.
+Build, tipos, lint dirigido e os 16 testes unitários também passaram. O teste
+continua simulando a inscrição remota; não comprova entrega Web Push em produção.
+
 Pendentes antes de ativar Production: aplicação da migration no Supabase remoto,
 configuração das variáveis e teste de **Push remoto real** no Android/Chrome. As
 credenciais privadas e acesso administrativo não estavam disponíveis no ambiente
 de desenvolvimento. Production permanece sem opt-in/envio enquanto a flag não
 for explicitamente ativada.
+
+Verificação posterior no painel da Vercel: `SUPABASE_SERVICE_ROLE_KEY`,
+`VAPID_PRIVATE_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY` e
+`NEXT_PUBLIC_SUPABASE_URL` já constam em Production e Preview. Os valores não
+foram expostos nem substituídos. Ainda faltam `CRON_SECRET`,
+`BOLAO_PUSH_TEST_SECRET` e a ativação controlada de `BOLAO_REMINDERS_ENABLED`.
+O painel do Supabase solicitou login; a migration remota ainda não foi aplicada
+nem verificada. Não ativar a flag antes de concluir o banco e o teste de Push real.
 
 ## Privacidade e navegadores
 
