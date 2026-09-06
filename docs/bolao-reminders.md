@@ -5,7 +5,7 @@
 Somente `/bolao` recebe labels brancos/maiores e o modal opcional. A página longa,
 o contador existente, valores, WhatsApp, SW e inscrições autenticadas do aplicativo
 não foram alterados. O worker `/bolao-sw.js` usa o escopo `/bolao`.
-O convite opcional aparece aproximadamente 8 segundos após a entrada na página,
+O convite opcional aparece aproximadamente 5 segundos após a entrada na página,
 sem solicitar permissão nativa antes do clique de consentimento.
 
 ## Arquivos desta melhoria
@@ -57,7 +57,7 @@ estão temporariamente indisponíveis, sem pedir permissão nativa.
 ## Teste imediato, sem esperar a agenda
 
 1. Primeiro use um deploy Vercel **Preview**, com as variáveis de teste configuradas
-   e `BOLAO_REMINDERS_ENABLED=false`. Em Android/Chrome com HTTPS, abrir `/bolao`, aguardar 8 segundos e escolher
+   e `BOLAO_REMINDERS_ENABLED=false`. Em Android/Chrome com HTTPS, abrir `/bolao`, aguardar 5 segundos e escolher
    `QUERO RECEBER LEMBRETES`. Autorizar o prompt nativo.
 2. Confirmar `LEMBRETES ATIVADOS` e uma linha na tabela
    `bolao_push_subscriptions`. Copiar o `id` dessa inscrição de teste.
@@ -129,10 +129,10 @@ contagem pós-data aprovados. Uma notificação **local** do Service Worker foi
 exibida/consultada no Chrome de teste, e a repetição da mesma tag manteve só uma.
 O lint completo ainda aponta erros preexistentes em outras telas.
 
-Após o ajuste para 8 segundos, a suíte de navegador passou contra a versão local
-de produção (`next start`): convite medido em 8.050 ms, sem abrir antes de 8s.
-Build, tipos, lint dirigido e os 16 testes unitários também passaram. O teste
-continua simulando a inscrição remota; não comprova entrega Web Push em produção.
+O convite agora está configurado para 5 segundos. A suíte de navegador foi atualizada
+para validar que o modal não abre antes desse intervalo e que continua sem solicitar
+permissão nativa antes do clique do participante. O teste continua simulando a
+inscrição remota; não comprova entrega Web Push em produção.
 
 Pendentes antes de ativar Production: aplicação da migration no Supabase remoto,
 configuração das variáveis e teste de **Push remoto real** no Android/Chrome. As
@@ -158,5 +158,5 @@ nem verificada. Não ativar a flag antes de concluir o banco e o teste de Push r
 - Android/Chrome: HTTPS e suporte a Service Worker/Push/Notifications necessários.
 - iPhone/iPad: Web Push exige web app na Tela de Início e versão compatível
   (iOS/iPadOS 16.4+). Navegador incorporado do WhatsApp pode não oferecer Push.
-- Preferências/permissão do sistema operacional prevalecem. A página sempre mantém
+- Preferências/permissão do sistema operacional prevalecem. A página sempre mantém
   o contador acessível quando Push não é suportado ou é recusado.
