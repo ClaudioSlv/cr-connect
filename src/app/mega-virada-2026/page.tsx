@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import Image from "next/image";
 
 import { CountdownClient } from "./countdown-client";
 
@@ -86,24 +85,9 @@ export default function MegaVirada2026Page() {
       />
 
       <div className="mx-auto w-full max-w-2xl">
-        <header className="text-center">
-          <h1 className="sr-only">🍀 BOLÃO MEGA DA VIRADA 2026 🍀</h1>
-          <figure className="mx-auto max-w-md overflow-hidden rounded-[1.5rem] border border-[#d6ae4b]/45 bg-black shadow-[0_26px_90px_rgba(0,0,0,.6),0_0_45px_rgba(29,199,100,.08)]">
-            <Image
-              src="/mega-virada-2026/arte-bolao-mega-virada-2026.jpg"
-              alt="Bolão Mega da Virada 2026: prêmio estimado, dados do bolão e data de abertura dos pagamentos"
-              width={853}
-              height={1280}
-              priority
-              sizes="(max-width: 480px) calc(100vw - 32px), 448px"
-              className="h-auto w-full"
-            />
-          </figure>
-        </header>
+        <h1 className="sr-only">🍀 BOLÃO MEGA DA VIRADA 2026 🍀</h1>
 
-        <div className="mt-6 sm:mt-8">
-          <CountdownClient />
-        </div>
+        <CountdownClient />
 
         <section className="mt-5 overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[.045] shadow-[0_20px_65px_rgba(0,0,0,.35)]">
           <div className="border-b border-white/10 px-5 py-4 sm:px-7 sm:py-5">
