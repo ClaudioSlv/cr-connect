@@ -11,7 +11,7 @@ const steps = [
 ] as const;
 
 export function OrderStatusTimeline({ status }: { status: string }) {
-  if (status === "cancelled") return <div className="mt-4 rounded-xl border border-red-500/60 bg-red-500/10 p-4"><b className="text-red-300">O.S. cancelada</b><p className="mt-1 text-sm text-zinc-300">O atendimento não seguirá para as próximas etapas.</p></div>;
+  if (status === "cancelled" || status === "declined") return <div className="mt-4 flex items-start gap-3 rounded-xl border border-red-500/60 bg-red-500/10 p-4"><span aria-hidden="true" className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-red-500 font-bold text-white">×</span><div><b className="text-red-300">{status === "declined" ? "O.S. recusada" : "O.S. cancelada"}</b><p className="mt-1 text-sm text-zinc-300">Atendimento interrompido. A O.S. não seguirá para as próximas etapas.</p></div></div>;
   const current = steps.findIndex(([value]) => value === status);
   const label = steps.find(([value]) => value === status)?.[1] || "Situação não informada";
   return <div className="mt-3">
