@@ -80,8 +80,10 @@ export function AttachmentsManager({ workshopId, orderId }: { workshopId: string
 
   async function remove(item: Attachment) {
     if (!confirm(`Remover ${item.file_name}?`)) return;
-    await db.storage.from(bucket).remove([item.storage_path]);
-    await db.from("attachments").delete().eq("id", item.id);
+    const { error: storageError } = await db.storage.from(bucket).remove([item.storage_path]);
+    if (storageError) { setMessage(storageError.message); return; }
+    const { error } = await db.from("attachments").delete().eq("id", item.id).eq("workshop_id", workshopId).eq("service_order_id", orderId);
+    if (error) { setMessage(error.message); return; }
     await load();
   }
 
@@ -98,15 +100,15 @@ export function AttachmentsManager({ workshopId, orderId }: { workshopId: string
         </label>
       </div>
       {message && <p className="mt-3 text-sm text-zinc-300">{message}</p>}
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="mt-4 grid grid-cols-2 gap-3">
         {items.map((item) => (
           <article key={item.id} className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900">
-            {item.mime_type.startsWith("image/") && item.url ? <img src={item.url} alt={item.file_name} className="h-36 w-full object-cover" /> : null}
+            {item.mime_type.startsWith("image/") && item.url ? <a href={item.url} target="_blank" rel="noreferrer" aria-label={`Ampliar ${item.file_name}`}><img src={item.url} alt={item.file_name} loading="lazy" className="h-28 w-full object-cover" /></a> : null}
             {item.mime_type.startsWith("video/") && item.url ? <video controls preload="metadata" className="h-36 w-full bg-black object-cover"><source src={item.url} type={item.mime_type} /></video> : null}
             {!item.mime_type.startsWith("image/") && !item.mime_type.startsWith("video/") ? <div className="grid h-24 place-items-center text-sm font-bold text-zinc-300">{fileKind(item).toUpperCase()}</div> : null}
-            <div className="flex items-center justify-between gap-2 p-3">
+            <div className="grid min-w-0 gap-2 p-2">
               <a className="min-w-0 truncate text-sm text-[#FFC107] underline" href={item.url} target="_blank" rel="noreferrer">{item.file_name}</a>
-              <div className="shrink-0 text-right"><p className="text-xs text-zinc-500">{readableSize(item.size_bytes)}</p><button onClick={() => void remove(item)} className="mt-1 text-xs text-red-300">Remover</button></div>
+              <div className="shrink-0 text-right"><p className="text-xs text-zinc-500">{readableSize(item.size_bytes)}</p><button type="button" onClick={() => void remove(item)} className="mt-1 text-xs text-red-300">Remover</button></div>
             </div>
           </article>
         ))}
