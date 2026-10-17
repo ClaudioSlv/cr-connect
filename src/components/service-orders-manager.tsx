@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { OrderItemsPanel } from "@/components/order-items-panel";
 import { PrintDocument } from "@/components/print-document";
+import { OrderStatusTimeline } from "@/components/order-status-timeline";
 import { AttachmentsManager } from "@/components/attachments-manager";
 
 type Client = { id: string; full_name: string; phone: string | null; whatsapp: string | null };
@@ -31,6 +32,15 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const dirty = selected
+    ? client !== selected.client_id || vehicle !== selected.vehicle_id || status !== selected.status || complaint !== selected.customer_complaint || diagnosis !== (selected.diagnosis || "") || note !== (selected.notes || "")
+    : Boolean(client || vehicle || complaint || diagnosis || note || status !== "open");
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
   const orderTotal = orderItems.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price) - Number(item.discount || 0), 0);
 
   async function load() {
@@ -78,10 +88,11 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
   }
 
   async function edit(order: Order) {
-    setSelected(order); setClient(order.client_id); setVehicle(order.vehicle_id); setStatus(order.status); setComplaint(order.customer_complaint); setDiagnosis(order.diagnosis || ""); setNote(order.notes || ""); setMessage(`O.S. #${order.number} aberta para edição.`);
+    if (dirty && !window.confirm("Descartar as alterações não salvas para abrir outra O.S.?")) return;
+    setSelected(order); setOrderItems([]); setClient(order.client_id); setVehicle(order.vehicle_id); setStatus(order.status); setComplaint(order.customer_complaint); setDiagnosis(order.diagnosis || ""); setNote(order.notes || ""); setMessage(`O.S. #${order.number} aberta para edição.`);
     const { data } = await db.from("service_order_items").select("description,quantity,unit_price,discount").eq("workshop_id", workshopId).eq("service_order_id", order.id);
     setOrderItems((data || []) as OrderItem[]);
-    window.setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    window.setTimeout(() => { const section = formRef.current?.querySelector("details"); if (section) section.open = true; formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 80);
   }
 
   async function remove(order: Order) {
@@ -126,14 +137,39 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
 
   return <div className="grid gap-7 xl:grid-cols-[420px_1fr]">
     {orders.some((order) => order.status === "awaiting_appointment" && order.appointment_requested_at) && <section className="rounded-xl border border-emerald-500/60 bg-emerald-500/10 p-5 xl:col-span-2"><h2 className="text-xl font-semibold text-emerald-300">Agendamentos aguardando confirmação</h2><p className="mt-1 text-sm text-zinc-300">Confirme a data solicitada pelo cliente para que ele receba o aviso.</p><div className="mt-4 grid gap-3 md:grid-cols-2">{orders.filter((order) => order.status === "awaiting_appointment" && order.appointment_requested_at).map((order) => <article key={order.id} className="rounded-lg border border-emerald-500/30 bg-black/30 p-4"><b>O.S. #{order.number} · {order.clients?.full_name}</b><p className="mt-2 text-sm text-zinc-200">{new Date(order.appointment_requested_at!).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={saving} onClick={() => void confirmAppointment(order)} className="rounded-lg bg-emerald-500 px-4 py-2 font-bold text-black disabled:opacity-60">Confirmar agendamento</button><button type="button" onClick={() => void edit(order)} className="rounded-lg border border-zinc-500 px-4 py-2 font-bold text-zinc-100">Abrir O.S.</button></div></article>)}</div></section>}
-    <form ref={formRef} onSubmit={save} className="rounded-xl border border-zinc-800 bg-[#1A1A1A] p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">{selected ? `Editando O.S. #${selected.number}` : "Nova O.S."}</h2>{selected && <div className="flex flex-wrap gap-2"><PrintDocument type="Ordem de Serviço" number={`#${selected.number}`} client={selected.clients?.full_name || "Cliente"} vehicle={`${selected.vehicles?.brand || ""} ${selected.vehicles?.model || ""} ${selected.vehicles?.plate || ""}`} status={states.find((item) => item[0] === status)?.[1] || status} note={note || complaint} items={orderItems} /><button type="button" onClick={sendWhatsApp} className="rounded-lg border border-emerald-500/70 px-4 py-2 text-sm font-bold text-emerald-300">Enviar no WhatsApp</button></div>}</div>
-      <div className="mt-4 grid gap-3"><select required className="field" value={client} onChange={(event) => { setClient(event.target.value); setVehicle(""); }}><option value="">Cliente *</option>{clients.map((item) => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select><select required className="field" disabled={!client} value={vehicle} onChange={(event) => setVehicle(event.target.value)}><option value="">Veículo *</option>{allowed.map((item) => <option key={item.id} value={item.id}>{item.brand} {item.model} {item.plate ? `(${item.plate})` : ""}</option>)}</select><select className="field" value={status} onChange={(event) => setStatus(event.target.value)}>{states.map((item) => <option key={item[0]} value={item[0]}>{item[1]}</option>)}</select><textarea required className="field min-h-24" placeholder="Reclamação do cliente" value={complaint} onChange={(event) => setComplaint(event.target.value)} /><textarea className="field" placeholder="Diagnóstico" value={diagnosis} onChange={(event) => setDiagnosis(event.target.value)} /><textarea className="field" placeholder="Observações" value={note} onChange={(event) => setNote(event.target.value)} /></div>
-      <div className="mt-4 flex flex-wrap gap-3"><button disabled={saving} className="rounded-lg bg-[#FFC107] px-4 py-2 font-bold text-black disabled:cursor-wait disabled:opacity-60">{saving ? "Salvando…" : "Salvar O.S."}</button><a href="/app" className="rounded-lg border border-zinc-600 px-4 py-2 font-bold text-zinc-100">Voltar ao menu</a></div>
+    <section className="min-w-0 pb-36 xl:pb-5 rounded-xl border border-zinc-800 bg-[#1A1A1A] p-4 sm:p-5">
+      <form id="service-order-form" ref={formRef} onSubmit={save} onInvalidCapture={(event) => { const field = event.target as HTMLElement; const section = field.closest("details"); if (section) section.open = true; }}>
+      <div className="mb-4 rounded-xl border border-zinc-700 bg-black/30 p-4">
+        <p className="text-xs font-bold uppercase tracking-widest text-[#FFC107]">{selected ? `O.S. #${selected.number}` : "Novo atendimento"}</p>
+        <h2 className="mt-2 text-xl font-bold break-words">{clients.find(item => item.id === client)?.full_name || "Selecione o cliente"}</h2>
+        <p className="mt-1 text-sm text-zinc-300">{vehicles.filter(item => item.id === vehicle).map(item => `${item.brand} ${item.model} · ${item.plate || "sem placa"}`).join("") || "Selecione o veículo"}</p>
+        <div className="mt-3 flex flex-wrap justify-between gap-2 text-sm"><span className="rounded-md bg-[#FFC107]/10 px-2 py-1 font-bold text-[#FFC107]">{states.find(item => item[0] === status)?.[1]}</span><b className="py-1">R$ {orderTotal.toLocaleString("pt-BR", {minimumFractionDigits:2, maximumFractionDigits:2})}</b></div>
+      </div>
+      <details name="order-editor" open className="rounded-xl border border-zinc-700 bg-black/20 p-4">
+        <summary className="cursor-pointer font-bold text-zinc-100">Dados do atendimento</summary>
+        <div className="mt-4 grid gap-4">
+          <label className="text-sm text-zinc-300">Cliente *<select required className="field mt-1" value={client} onChange={(event) => { setClient(event.target.value); setVehicle(""); }}><option value="">Selecione o cliente</option>{clients.map((item) => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select></label>
+          <label className="text-sm text-zinc-300">Veículo *<select required className="field mt-1" disabled={!client} value={vehicle} onChange={(event) => setVehicle(event.target.value)}><option value="">Selecione o veículo</option>{allowed.map((item) => <option key={item.id} value={item.id}>{item.brand} {item.model} {item.plate ? `(${item.plate})` : ""}</option>)}</select></label>
+          <label className="text-sm text-zinc-300">Situação do atendimento<select className="field mt-1" value={status} onChange={(event) => setStatus(event.target.value)}>{states.map((item) => <option key={item[0]} value={item[0]}>{item[1]}</option>)}</select></label>
+          <label className="text-sm text-zinc-300">Defeito relatado pelo cliente *<textarea required className="field mt-1 min-h-28" value={complaint} onChange={(event) => setComplaint(event.target.value)} /></label>
+          <label className="text-sm text-zinc-300">Diagnóstico da oficina<textarea className="field mt-1 min-h-24" value={diagnosis} onChange={(event) => setDiagnosis(event.target.value)} /></label>
+          <label className="text-sm text-zinc-300">Observações<textarea className="field mt-1 min-h-24" value={note} onChange={(event) => setNote(event.target.value)} /></label>
+        </div>
+      </details>
       {message && <p className="mt-3 text-sm text-[#FFC107]">{message}</p>}
       {selected?.status === "awaiting_appointment" && selected.appointment_requested_at && <div className="mt-4 rounded-lg border border-emerald-500/60 bg-emerald-500/10 p-4"><p className="text-sm text-zinc-200">Data solicitada pelo cliente: <b>{new Date(selected.appointment_requested_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</b></p><button type="button" disabled={saving} onClick={() => void confirmAppointment(selected)} className="mt-3 rounded-lg bg-emerald-500 px-4 py-2 font-bold text-black disabled:opacity-60">Confirmar agendamento</button></div>}
-      {selected && <><p className="mt-4 rounded-lg border border-[#6b510d] bg-[#211805] p-3 text-sm text-[#FFC107]">Valor atual da O.S.: <b>R$ {orderTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>. Gere o PDF e, em seguida, use o WhatsApp para encaminhá-lo ao cliente.</p><OrderItemsPanel workshopId={workshopId} orderId={selected.id} status={status} onItemsChange={setOrderItems} /><AttachmentsManager workshopId={workshopId} orderId={selected.id} /></>}
-    </form>
+      </form>
+      {selected && <div className="my-4 rounded-xl border border-zinc-700 bg-black/20 p-4"><h3 className="text-sm font-bold">Acompanhamento da O.S.</h3><OrderStatusTimeline status={selected.status} />{dirty && status !== selected.status && <p className="mt-2 text-xs text-[#FFC107]">A nova situação será aplicada ao salvar.</p>}</div>}
+      {selected ? <div key={selected.id} className="mt-4 space-y-3">
+        <details name="order-editor" className="rounded-xl border border-zinc-700 bg-black/20 p-4"><summary className="cursor-pointer font-bold">Serviços e peças · R$ {orderTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</summary><p className="mt-3 text-xs text-zinc-400">Os itens são salvos ao adicionar ou remover.</p><OrderItemsPanel workshopId={workshopId} orderId={selected.id} status={status} onItemsChange={setOrderItems} /></details>
+        <details name="order-editor" className="rounded-xl border border-zinc-700 bg-black/20 p-4"><summary className="cursor-pointer font-bold">Fotos e documentos</summary><AttachmentsManager workshopId={workshopId} orderId={selected.id} /></details>
+        <details name="order-editor" className="rounded-xl border border-zinc-700 bg-black/20 p-4"><summary className="cursor-pointer font-bold">Compartilhar O.S.</summary><p className="mt-3 text-sm text-zinc-400">{dirty ? "Salve as alterações antes de gerar o documento." : "Baixe o PDF e anexe na conversa do WhatsApp."}</p><div className="mt-3 flex flex-wrap gap-2">{!dirty && <><PrintDocument type="Ordem de Serviço" number={`#${selected.number}`} client={selected.clients?.full_name || "Cliente"} vehicle={`${selected.vehicles?.brand || ""} ${selected.vehicles?.model || ""} ${selected.vehicles?.plate || ""}`} status={states.find((item) => item[0] === status)?.[1] || status} note={note || complaint} items={orderItems} /><button type="button" onClick={sendWhatsApp} className="rounded-lg border border-emerald-500/70 px-4 py-3 text-sm font-bold text-emerald-300">Enviar no WhatsApp</button></>}</div></details>
+      </div> : <p className="mt-4 text-sm text-zinc-400">Salve a O.S. para adicionar serviços, peças e fotos.</p>}
+      <div className="fixed inset-x-4 bottom-24 z-20 mt-5 rounded-xl xl:sticky xl:inset-x-auto xl:bottom-4 border border-zinc-600 bg-[#171717] p-3 shadow-xl">
+        <p role="status" className="mb-2 text-xs text-zinc-300">{dirty ? "Alterações ainda não salvas" : selected ? "Dados do atendimento salvos" : "Preencha os dados do atendimento"}</p>
+        <div className="flex flex-wrap gap-2"><button type="submit" form="service-order-form" disabled={saving} className="min-h-12 flex-1 rounded-lg bg-[#FFC107] px-4 py-3 font-bold text-black disabled:opacity-60">{saving ? "Salvando…" : "Salvar O.S."}</button><a href="/app" onClick={(event) => { if (dirty && !window.confirm("Sair sem salvar as alterações da O.S.?")) event.preventDefault(); }} className="rounded-lg border border-zinc-600 px-4 py-3 text-sm font-bold">Voltar ao menu</a></div>
+      </div>
+    </section>
     <section><div className="rounded-xl border border-[#FFC107]/60 bg-[#211805] p-5"><h2 className="text-xl font-semibold text-[#FFC107]">Solicitações dos clientes</h2><p className="mt-1 text-sm text-zinc-300">Aceite para criar a O.S. e iniciar o orçamento. O cliente recebe a confirmação no aplicativo.</p><div className="mt-4 space-y-3">{requests.length === 0 && <p className="text-sm text-zinc-400">Nenhuma solicitação nova.</p>}{requests.map((request) => <article key={request.id} className="rounded-lg border border-[#6b510d] bg-black/30 p-4"><b>{request.clients?.full_name || "Cliente"}</b><small className="mt-1 block text-zinc-400">{request.vehicles?.brand} {request.vehicles?.model} · {request.vehicles?.plate || "sem placa"}</small><p className="mt-3 text-sm text-zinc-200">{request.complaint}</p><div className="mt-4 flex flex-wrap gap-3"><button type="button" disabled={saving} onClick={() => void acceptRequest(request)} className="rounded-lg bg-[#FFC107] px-4 py-2 font-bold text-black disabled:opacity-60">Aceitar e criar O.S.</button><button type="button" disabled={saving} onClick={() => void declineRequest(request)} className="rounded-lg border border-red-500/70 px-4 py-2 font-bold text-red-300 disabled:opacity-60">Recusar</button></div></article>)}</div></div><h2 className="mt-7 text-xl font-semibold">Ordens de serviço</h2><p className="mt-1 text-sm text-zinc-400">Toque em Editar O.S. para abrir o atendimento e fazer alterações.</p><div className="mt-4 space-y-3">{orders.map((order) => <article key={order.id} className="rounded-xl border border-zinc-800 bg-[#171717] p-4"><div className="flex flex-wrap justify-between gap-3"><span><b>O.S. #{order.number}</b> · {order.clients?.full_name}<br /><small className="text-zinc-500">{order.vehicles?.brand} {order.vehicles?.model} · {order.vehicles?.plate || "sem placa"}</small></span><b className={order.status === "cancelled" ? "text-red-400" : order.status === "repairing" || order.status === "finished" || order.status === "delivered" ? "text-emerald-400" : "text-[#FFC107]"}>{states.find((item) => item[0] === order.status)?.[1]}</b></div><div className="mt-4 flex flex-wrap gap-3"><button type="button" onClick={() => void edit(order)} className="rounded-lg bg-[#FFC107] px-4 py-2 font-bold text-black">Editar O.S.</button><button type="button" onClick={() => void remove(order)} className="rounded-lg border border-red-500/70 px-4 py-2 font-bold text-red-300">Excluir O.S.</button></div></article>)}</div></section>
   </div>;
 }
