@@ -3,7 +3,7 @@
 import { loadMileagePhotos, mileagePhotoLabels } from "@/lib/mileage-photos";
 import { paymentMethodLabel, paymentTotals, type PaymentData } from "@/lib/payment-terms";
 import QRCode from "qrcode";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type Line = { description: string; quantity: number; unit_price: number; discount?: number };
@@ -13,12 +13,16 @@ const appUrl = "https://cr-connect-ic3w.vercel.app";
 const pixKey = "+5513991320205";
 
 export function PrintDocument({ type, number, client, vehicle, status, items, note, payment, disabled, orderId }: Props) {
+  const [busy, setBusy] = useState(false);
+  const generating = useRef(false);
+  const [downloadUrl, setDownloadUrl] = useState("");
+  useEffect(() => () => { if (downloadUrl) URL.revokeObjectURL(downloadUrl); }, [downloadUrl]);
   const [message, setMessage] = useState("");
   const [pixDiscountPercentage, setPixDiscountPercentage] = useState(7);
-  const db = createClient();
 
   useEffect(() => {
     async function loadPixDiscount() {
+      const db = createClient();
       const { data: { user } } = await db.auth.getUser(); if (!user) return;
       const { data: membership } = await db.from("workshop_users").select("workshop_id").eq("user_id", user.id).limit(1).maybeSingle();
       if (!membership) return;
@@ -29,7 +33,37 @@ export function PrintDocument({ type, number, client, vehicle, status, items, no
   }, []);
 
   async function print() {
+    if (generating.current) return;
     setMessage("");
+    if (type === "Ordem de Serviço") {
+      generating.current = true; setBusy(true);
+      try {
+        const { createOrderPdf } = await import("@/lib/order-pdf");
+        const pdf = createOrderPdf({ number, client, vehicle, status, items, note, payment });
+        if (orderId) {
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            const photos = await Promise.race([loadMileagePhotos(orderId), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("timeout")), 8000); })]);
+            for (const photo of photos) {
+              if (!photo.url) continue;
+              const { addMileageToPdf } = await import("@/lib/order-pdf");
+              await addMileageToPdf(pdf, photo.url, mileagePhotoLabels[photo.attachment_kind], photo.created_at);
+            }
+          } catch { pdf.addPage(); pdf.text("Fotos indisponíveis. Consulte o registro de KM no aplicativo.", 18, 20); }
+          finally { clearTimeout(timer); }
+        }
+        // Keep a visible download link for browsers that block automatic downloads.
+        const url = URL.createObjectURL(pdf.output("blob"));
+        setDownloadUrl(url);
+        const link = document.createElement("a");
+        link.href = url; link.download = `OS-${number.replace(/[^a-zA-Z0-9-]/g, "")}.pdf`;
+        document.body.appendChild(link); link.click(); link.remove();
+        setMessage("PDF gerado. Se o download não iniciou, toque em Baixar PDF abaixo.");
+      } catch {
+        setMessage("Não foi possível gerar o PDF. Tente novamente.");
+      } finally { generating.current = false; setBusy(false); }
+      return;
+    }
     const subtotal = items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price) - Number(item.discount || 0), 0);
     const { total, surcharge } = paymentTotals(subtotal, payment?.surcharge_percent || 0);
     const configured = payment && (payment.payment_method !== "not_defined" || payment.payment_terms || Number(payment.surcharge_percent) > 0);
@@ -67,23 +101,16 @@ export function PrintDocument({ type, number, client, vehicle, status, items, no
       } catch { /* O PDF continua disponível mesmo se a criação do checkout falhar. */ }
     }
 
-    let mileageSection = "";
-    if (type === "Ordem de Serviço" && orderId) {
-      try {
-        const photos = await loadMileagePhotos(orderId);
-        if (photos.length) mileageSection = `<section class="box" style="break-inside:avoid"><div class="label">REGISTRO DE QUILOMETRAGEM</div><div class="grid">${["mileage_initial", "mileage_final"].map(kind => { const photo = photos.find(item => item.attachment_kind === kind); return `<div><p><b>${mileagePhotoLabels[kind as keyof typeof mileagePhotoLabels]}</b></p>${photo?.url ? `<img src="${escapeHtml(photo.url)}" alt="Foto do painel" style="width:100%;max-height:220px;object-fit:contain"/><p class="muted">Registrada em ${new Date(photo.created_at).toLocaleString("pt-BR")}</p>` : "<p>Foto não adicionada.</p>"}</div>`; }).join("")}</div></section>`;
-      } catch { mileageSection = '<section class="box"><p>As fotos de quilometragem não puderam ser carregadas. Consulte a O.S. no aplicativo.</p></section>'; }
-    }
     const termsSection = payment ? `<section class="box"><div class="label">CONDIÇÕES DE PAGAMENTO</div><p><b>${escapeHtml(paymentMethodLabel(payment.payment_method))}</b></p><p style="white-space:pre-wrap">${escapeHtml(payment.payment_terms || "A combinar")}</p><p>Serviços e peças: ${currency.format(subtotal)} · Acréscimo (${Number(payment.surcharge_percent)}%): ${currency.format(surcharge)}</p>${payment.surcharge_reason ? `<p>Motivo do acréscimo: ${escapeHtml(payment.surcharge_reason)}</p>` : ""}<p><b>Total combinado: ${currency.format(total)}</b></p><p>${payment.acceptance ? `${payment.acceptance.source === "client_portal" ? "Aceito pelo cliente no portal" : "Aceite informado pela oficina"} em ${new Date(payment.acceptance.at).toLocaleString("pt-BR")} · ${currency.format(payment.acceptance.total)}` : "Aceite pendente. O cliente deve conferir e aceitar as condições antes do serviço."}</p></section>` : "";
-    const paymentInfo = type === "Ordem de Serviço" && (!configured || ["pix", "combined"].includes(payment.payment_method)) ? `<section class="pix-payment"><div class="pix-icon">PIX</div><div><div class="label">PAGAMENTO VIA PIX</div><strong>Chave Pix: 13991320205</strong><p>Valor a pagar: <b>${currency.format(total)}</b></p><small>Chave vinculada à InfinitePay. Envie o comprovante pelo WhatsApp após o pagamento.</small></div></section>` : "";
+
 
     win.opener = null;
     win.document.open();
-    win.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${escapeHtml(type)} ${escapeHtml(number)}</title><style>@page{size:A4;margin:18mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#151515;margin:0;padding:20px}.paper{position:relative;min-height:250mm}.watermark{position:fixed;left:50%;top:48%;width:340px;transform:translate(-50%,-50%);opacity:.055;z-index:-1}.toolbar{max-width:210mm;margin:0 auto 16px;padding:12px;border-radius:10px;background:#171717;color:#fff}.toolbar button{border:0;border-radius:7px;background:#f5ae00;padding:10px 14px;font-weight:bold;color:#151515}.toolbar p{margin:8px 0 0;font-size:12px;color:#ddd}.head{display:flex;justify-content:space-between;gap:24px;border-bottom:3px solid #f5ae00;padding-bottom:14px}.brand{display:flex;gap:12px;align-items:center}.brand img{width:70px;height:70px;border-radius:10px}.brand b{font-size:18px}.label{color:#8a6100;font-size:12px;letter-spacing:1.5px;font-weight:bold}.doc{font-size:27px;font-weight:800}.box{margin-top:22px;border:1px solid #ddd;border-radius:8px;padding:14px;background:#fffdf8}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.muted{font-size:12px;color:#666}table{width:100%;border-collapse:collapse;margin-top:20px}th{background:#171717;color:#fff;text-align:left;font-size:12px;padding:10px}td{padding:10px;border-bottom:1px solid #ddd;font-size:13px}td:nth-child(n+2),th:nth-child(n+2){text-align:right}.total{text-align:right;font-size:20px;font-weight:bold;margin-top:15px;color:#a66d00}.pix-payment,.card-payment{display:flex;align-items:center;gap:16px;margin-top:24px;border-radius:10px;padding:14px}.pix-payment{border:2px solid #28a886;background:#f2fffb}.card-payment{border:2px solid #151515;background:#f8f8f8}.pix-payment img{width:120px;height:120px;flex:none}.pix-icon,.infinite-icon{display:grid;place-items:center;width:72px;height:72px;border-radius:12px;color:#fff;font-size:25px;font-weight:800}.pix-icon{background:#28a886;font-size:19px;letter-spacing:1px}.infinite-icon{background:#151515}.pix-payment strong,.card-payment strong{display:block;margin-top:3px;font-size:18px}.pix-payment p,.card-payment p{margin:7px 0;font-size:13px}.pix-payment small,.card-payment small{font-size:10px;color:#555}.card-payment a{display:inline-block;margin-top:5px;border-radius:6px;background:#151515;padding:9px 12px;color:#fff;text-decoration:none;font-size:12px;font-weight:bold}.app-promo{display:flex;align-items:center;gap:16px;margin-top:28px;border:2px solid #f5ae00;border-radius:10px;padding:12px;background:#fffaf0}.app-promo img{width:104px;height:104px}.app-promo strong{display:block;margin-top:3px;font-size:20px;color:#151515}.app-promo p{margin:7px 0;color:#444;font-size:12px;line-height:1.4}.app-promo small{font-size:10px;color:#666}.footer{position:fixed;bottom:0;font-size:10px;color:#777;width:100%;border-top:1px solid #ddd;padding-top:8px}@media print{body{padding:0}.toolbar{display:none}}@media(max-width:600px){.head{display:block}.head>div+div{margin-top:16px}.grid{grid-template-columns:1fr}.watermark{width:260px}}</style></head><body><div class="toolbar"><button onclick="window.print()">Baixar / imprimir PDF</button><p>No celular, toque neste botão e escolha “Salvar como PDF” ou compartilhar.</p></div><main class="paper"><img class="watermark" src="${logo}" alt=""/><header class="head"><div class="brand"><img src="${logo}" alt="CR Reparador"/><div><b>CR REPARADOR AUTOMOTIVO</b><div class="label">CR CONNECT · GESTÃO AUTOMOTIVA</div></div></div><div><div class="label">${escapeHtml(type.toUpperCase())}</div><div class="doc">${escapeHtml(number)}</div><div class="muted">Emitido em ${new Date().toLocaleDateString("pt-BR")}</div></div></header><section class="box grid"><div><div class="label">CLIENTE</div><b>${escapeHtml(client)}</b></div><div><div class="label">VEÍCULO</div><b>${escapeHtml(vehicle)}</b></div><div><div class="label">SITUAÇÃO</div><b>${escapeHtml(status)}</b></div>${note ? `<div><div class="label">OBSERVAÇÕES</div><span>${escapeHtml(note)}</span></div>` : ""}</section><table><thead><tr><th>Descrição</th><th>Qtd.</th><th>Unitário</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="total">Total: ${currency.format(total)}</div>${termsSection}${mileageSection}${pixPayment}${cardPayment}${paymentInfo}${appPromo}<footer class="footer">Documento gerado pelo CR Connect · A marca d’água identifica a CR Reparador Automotivo.</footer></main></body></html>`);
+    win.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${escapeHtml(type)} ${escapeHtml(number)}</title><style>@page{size:A4;margin:18mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#151515;margin:0;padding:20px}.paper{position:relative;min-height:250mm}.watermark{position:fixed;left:50%;top:48%;width:340px;transform:translate(-50%,-50%);opacity:.055;z-index:-1}.toolbar{max-width:210mm;margin:0 auto 16px;padding:12px;border-radius:10px;background:#171717;color:#fff}.toolbar button{border:0;border-radius:7px;background:#f5ae00;padding:10px 14px;font-weight:bold;color:#151515}.toolbar p{margin:8px 0 0;font-size:12px;color:#ddd}.head{display:flex;justify-content:space-between;gap:24px;border-bottom:3px solid #f5ae00;padding-bottom:14px}.brand{display:flex;gap:12px;align-items:center}.brand img{width:70px;height:70px;border-radius:10px}.brand b{font-size:18px}.label{color:#8a6100;font-size:12px;letter-spacing:1.5px;font-weight:bold}.doc{font-size:27px;font-weight:800}.box{margin-top:22px;border:1px solid #ddd;border-radius:8px;padding:14px;background:#fffdf8}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.muted{font-size:12px;color:#666}table{width:100%;border-collapse:collapse;margin-top:20px}th{background:#171717;color:#fff;text-align:left;font-size:12px;padding:10px}td{padding:10px;border-bottom:1px solid #ddd;font-size:13px}td:nth-child(n+2),th:nth-child(n+2){text-align:right}.total{text-align:right;font-size:20px;font-weight:bold;margin-top:15px;color:#a66d00}.pix-payment,.card-payment{display:flex;align-items:center;gap:16px;margin-top:24px;border-radius:10px;padding:14px}.pix-payment{border:2px solid #28a886;background:#f2fffb}.card-payment{border:2px solid #151515;background:#f8f8f8}.pix-payment img{width:120px;height:120px;flex:none}.pix-icon,.infinite-icon{display:grid;place-items:center;width:72px;height:72px;border-radius:12px;color:#fff;font-size:25px;font-weight:800}.pix-icon{background:#28a886;font-size:19px;letter-spacing:1px}.infinite-icon{background:#151515}.pix-payment strong,.card-payment strong{display:block;margin-top:3px;font-size:18px}.pix-payment p,.card-payment p{margin:7px 0;font-size:13px}.pix-payment small,.card-payment small{font-size:10px;color:#555}.card-payment a{display:inline-block;margin-top:5px;border-radius:6px;background:#151515;padding:9px 12px;color:#fff;text-decoration:none;font-size:12px;font-weight:bold}.app-promo{display:flex;align-items:center;gap:16px;margin-top:28px;border:2px solid #f5ae00;border-radius:10px;padding:12px;background:#fffaf0}.app-promo img{width:104px;height:104px}.app-promo strong{display:block;margin-top:3px;font-size:20px;color:#151515}.app-promo p{margin:7px 0;color:#444;font-size:12px;line-height:1.4}.app-promo small{font-size:10px;color:#666}.footer{position:fixed;bottom:0;font-size:10px;color:#777;width:100%;border-top:1px solid #ddd;padding-top:8px}@media print{body{padding:0}.toolbar{display:none}}@media(max-width:600px){.head{display:block}.head>div+div{margin-top:16px}.grid{grid-template-columns:1fr}.watermark{width:260px}}</style></head><body><div class="toolbar"><button onclick="window.print()">Baixar / imprimir PDF</button><p>No celular, toque neste botão e escolha “Salvar como PDF” ou compartilhar.</p></div><main class="paper"><img class="watermark" src="${logo}" alt=""/><header class="head"><div class="brand"><img src="${logo}" alt="CR Reparador"/><div><b>CR REPARADOR AUTOMOTIVO</b><div class="label">CR CONNECT · GESTÃO AUTOMOTIVA</div></div></div><div><div class="label">${escapeHtml(type.toUpperCase())}</div><div class="doc">${escapeHtml(number)}</div><div class="muted">Emitido em ${new Date().toLocaleDateString("pt-BR")}</div></div></header><section class="box grid"><div><div class="label">CLIENTE</div><b>${escapeHtml(client)}</b></div><div><div class="label">VEÍCULO</div><b>${escapeHtml(vehicle)}</b></div><div><div class="label">SITUAÇÃO</div><b>${escapeHtml(status)}</b></div>${note ? `<div><div class="label">OBSERVAÇÕES</div><span>${escapeHtml(note)}</span></div>` : ""}</section><table><thead><tr><th>Descrição</th><th>Qtd.</th><th>Unitário</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="total">Total: ${currency.format(total)}</div>${termsSection}${pixPayment}${cardPayment}${appPromo}<footer class="footer">Documento gerado pelo CR Connect · A marca d’água identifica a CR Reparador Automotivo.</footer></main></body></html>`);
     win.document.close();
   }
 
-  return <div><button type="button" disabled={disabled} onClick={() => void print()} className="rounded-lg border border-[#FFC107] px-4 py-2 text-sm font-bold text-[#FFC107] hover:bg-[#261e0b]">Gerar PDF</button>{message && <p className="mt-2 text-sm text-red-400">{message}</p>}</div>;
+  return <div><button type="button" disabled={disabled || busy} onClick={() => void print()} className="rounded-lg border border-[#FFC107] px-4 py-2 text-sm font-bold text-[#FFC107] hover:bg-[#261e0b]">{busy ? "Gerando PDF…" : "Gerar PDF"}</button>{disabled && <p className="mt-2 text-sm text-amber-300">Salve as condições de pagamento para liberar o PDF.</p>}{downloadUrl && <a className="mt-3 block font-bold text-[#FFC107] underline" href={downloadUrl} download={`OS-${number.replace(/[^a-zA-Z0-9-]/g, "")}.pdf`}>Baixar PDF</a>}{message && <p className="mt-2 text-sm text-amber-300" role="status">{message}</p>}</div>;
 }
 
 function escapeHtml(value: string) {
