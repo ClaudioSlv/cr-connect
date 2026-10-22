@@ -31,16 +31,17 @@ export default async function AppHome() {
   if (!workshop || !membership) return <main className="grid min-h-screen place-items-center p-6"><OnboardingForm /></main>;
 
 
-  const activeStatuses = ["open", "diagnosing", "awaiting_approval", "awaiting_part", "repairing", "awaiting_appointment", "appointment_confirmed"];
+  // Include every ongoing status without referencing enum values absent in older databases.
+  const closedStatuses = "(finished,delivered,cancelled)";
   const [clients, vehicles, orders, products, approvals, ready, recent] = await Promise.all([
     db.from("clients").select("id", { count: "exact", head: true }).eq("workshop_id", membership.workshop_id),
     db.from("vehicles").select("id", { count: "exact", head: true }).eq("workshop_id", membership.workshop_id),
-    db.from("service_orders").select("id", { count: "exact", head: true }).eq("workshop_id", membership.workshop_id).in("status", activeStatuses),
+    db.from("service_orders").select("id", { count: "exact", head: true }).eq("workshop_id", membership.workshop_id).not("status", "in", closedStatuses),
     db.from("products").select("id", { count: "exact", head: true }).eq("workshop_id", membership.workshop_id),
     db.from("budgets").select("id", { count: "exact", head: true }).eq("workshop_id", membership.workshop_id).eq("status", "sent"),
     db.from("service_orders").select("id", { count: "exact", head: true }).eq("workshop_id", membership.workshop_id).eq("status", "finished"),
     db.from("service_orders").select("id,number,status,vehicles(brand,model,plate)")
-      .eq("workshop_id", membership.workshop_id).in("status", activeStatuses)
+      .eq("workshop_id", membership.workshop_id).not("status", "in", closedStatuses)
       .order("updated_at", { ascending: false }).limit(5),
   ]);
   const metrics = [
