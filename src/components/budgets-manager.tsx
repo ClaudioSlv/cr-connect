@@ -38,10 +38,12 @@ export function BudgetsManager({ workshopId }: { workshopId: string }) {
     setCatalog((catalogResult.data || []) as Catalog[]); setTimeRates((ratesResult.data || []) as TimeRate[]);
   }
   async function loadItems(id: string) { const { data } = await db.from("budget_items").select("id,description,kind,quantity,unit_price,discount").eq("workshop_id", workshopId).eq("budget_id", id); setItems((data || []) as Item[]); }
+  // The initial effect loads external database state asynchronously.
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { void load(); }, []);
   const allowed = vehicles.filter((item) => item.client_id === client);
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price) - Number(item.discount), 0), [items]);
-  const total = paymentTotals(subtotal, payment?.surcharge_percent || 0).total;
+  const total = paymentTotals(subtotal, payment?.surcharge_percent || 0, payment?.pix_discount_percent || 0).total;
   const parsePrice = (value: string) => { const clean = value.replace(/[^0-9,.-]/g, "").trim(); return Number(clean.includes(",") ? clean.replace(/\./g, "").replace(",", ".") : clean); };
   function calculateDiscount(unitPrice: number, mode: "value" | "percent", value: string) {
     if (!value.trim()) return 0;
