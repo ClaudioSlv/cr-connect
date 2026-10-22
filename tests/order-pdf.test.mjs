@@ -41,3 +41,8 @@ test('long payment terms and descriptions keep the final text and totals',()=>{
  const bytes=pdf.output();
  assert.ok(pdf.getNumberOfPages()>3); assert.match(bytes,/ULTIMOITEM/); assert.match(bytes,/FIMDASCONDICOES/); assert.match(bytes,/800,10/);
 });
+
+test('Pix document shows the same discounted total in terms and payment',()=>{
+ const pdf=createOrderPdf({...base,payment:{...base.payment,payment_method:'pix',surcharge_percent:0,surcharge_reason:'',pix_discount_percent:7,deferred_without_deposit:false}});
+ const bytes=pdf.output(); assert.match(bytes,/651,00/); assert.match(bytes,/49,00/); assert.match(bytes,/7% de desconto no Pix/);
+});
