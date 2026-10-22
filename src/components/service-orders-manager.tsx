@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { orderDraftKey, parseOrderDraft } from "@/lib/service-order-draft";
 import { OrderItemsPanel } from "@/components/order-items-panel";
 import { OrderMileagePhotos } from "@/components/order-mileage-photos";
 import { uploadMileagePhoto, mileagePhotoLabels, type MileageDrafts, type MileagePhotoKind } from "@/lib/mileage-photos";
@@ -19,8 +20,10 @@ type ServiceRequest = { id: string; client_id: string; vehicle_id: string; owner
 
 const states = [["open", "Aberta"], ["diagnosing", "Em diagnóstico"], ["awaiting_approval", "Aguardando aprovação"], ["awaiting_appointment", "Aguardando agendamento"], ["appointment_confirmed", "Agendamento confirmado"], ["awaiting_part", "Aguardando peça"], ["repairing", "Em reparo"], ["finished", "Finalizada"], ["delivered", "Entregue"], ["cancelled", "Cancelada"]];
 
-export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
+export function ServiceOrdersManager({ workshopId, userId }: { workshopId: string; userId: string }) {
   const db = createClient();
+  const draftKey = orderDraftKey(workshopId, userId);
+  const userTouched = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
   const [clients, setClients] = useState<Client[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -63,9 +66,41 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
     setVehicles((vehicleResult.data || []) as Vehicle[]);
     setOrders((orderResult.data || []) as unknown as Order[]);
     setRequests((requestResult.data || []) as unknown as ServiceRequest[]);
+    return (orderResult.data || []) as unknown as Order[];
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    // Synchronize remote rows and the persisted camera draft when this scope opens.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load().then(async current => {
+      if (cancelled || userTouched.current) return;
+      let raw: string | null = null;
+      try { raw = window.localStorage.getItem(draftKey); } catch { return; }
+      const draft = parseOrderDraft(raw);
+      if (!draft) return;
+      const restored = draft.selectedId ? current.find(order => order.id === draft.selectedId) : null;
+      if (draft.selectedId && !restored) {
+        setMessage("O rascunho pertence a uma O.S. que não está disponível. Abra a ordem desejada para continuar."); return;
+      }
+      setSelected(restored || null); setClient(draft.client); setVehicle(draft.vehicle); setStatus(draft.status); setComplaint(draft.complaint); setDiagnosis(draft.diagnosis); setNote(draft.note);
+      setMessage("Preenchimento recuperado após a câmera. Confira os dados. Fotos ainda não salvas devem ser selecionadas novamente.");
+      if (restored) {
+        const { data } = await db.from("service_order_items").select("description,quantity,unit_price,discount").eq("workshop_id", workshopId).eq("service_order_id", restored.id);
+        if (!cancelled) setOrderItems((data || []) as OrderItem[]);
+      }
+    });
+    return () => { cancelled = true; };
+    // The initial recovery runs once for the signed-in workshop/user scope.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+  function preserveCameraDraft(selectedId: string | null = selected?.id || null) {
+    userTouched.current = true;
+    try { window.localStorage.setItem(draftKey, JSON.stringify({ selectedId, client, vehicle, status, complaint, diagnosis, note, savedAt: Date.now() })); }
+    catch { setMessage("Não foi possível guardar o rascunho neste navegador. Salve a O.S. antes de sair da página."); }
+  }
+  function clearCameraDraft() { try { window.localStorage.removeItem(draftKey); } catch {} }
+
   const allowed = vehicles.filter((item) => item.client_id === client);
 
   function sendWhatsApp() {
@@ -91,6 +126,7 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
     if (result.error) { setSaving(false); setMessage(result.error.message); return; }
     const savedOrder = result.data as unknown as Order;
     setSelected(savedOrder);
+    preserveCameraDraft(savedOrder.id);
     const failed: MileageDrafts = {};
     const photoErrors: string[] = [];
     for (const [kind, file] of Object.entries(mileageDrafts) as [MileagePhotoKind, File][]) {
@@ -99,12 +135,14 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
     }
     setMileageDrafts(failed); setPhotoRefresh(value => value + 1); setSaving(false);
     if (photoErrors.length) { setMessage(`O.S. salva, mas há foto pendente. Toque em Salvar O.S. para tentar novamente. ${photoErrors.join("; ")}`); await load(); return; }
+    clearCameraDraft();
     setMessage(`O.S. #${savedOrder.number} salva. Use “Gerar PDF” para baixar ou compartilhar com o cliente.`);
     await load();
   }
 
   async function edit(order: Order) {
     if (dirty && !window.confirm("Descartar as alterações não salvas para abrir outra O.S.?")) return;
+    clearCameraDraft();
     setMileageDrafts({}); setPayment(null); setSelected(order); setOrderItems([]); setClient(order.client_id); setVehicle(order.vehicle_id); setStatus(order.status); setComplaint(order.customer_complaint); setDiagnosis(order.diagnosis || ""); setNote(order.notes || ""); setMessage(`O.S. #${order.number} aberta para edição.`);
     const { data } = await db.from("service_order_items").select("description,quantity,unit_price,discount").eq("workshop_id", workshopId).eq("service_order_id", order.id);
     setOrderItems((data || []) as OrderItem[]);
@@ -115,7 +153,7 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
     if (!window.confirm(`Excluir a O.S. #${order.number} de ${order.clients?.full_name || "cliente"}? Esta ação não pode ser desfeita.`)) return;
     const { error } = await db.from("service_orders").delete().eq("id", order.id).eq("workshop_id", workshopId);
     if (error) { setMessage(error.message); return; }
-    if (selected?.id === order.id) { setMileageDrafts({}); setSelected(null); setOrderItems([]); setClient(""); setVehicle(""); setStatus("open"); setComplaint(""); setDiagnosis(""); setNote(""); }
+    if (selected?.id === order.id) { clearCameraDraft(); setMileageDrafts({}); setSelected(null); setOrderItems([]); setClient(""); setVehicle(""); setStatus("open"); setComplaint(""); setDiagnosis(""); setNote(""); }
     setMessage(`O.S. #${order.number} excluída.`);
     await load();
   }
@@ -154,7 +192,7 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
   return <div className="grid gap-7 xl:grid-cols-[420px_1fr]">
     {orders.some((order) => order.status === "awaiting_appointment" && order.appointment_requested_at) && <section className="rounded-xl border border-emerald-500/60 bg-emerald-500/10 p-5 xl:col-span-2"><h2 className="text-xl font-semibold text-emerald-300">Agendamentos aguardando confirmação</h2><p className="mt-1 text-sm text-zinc-300">Confirme a data solicitada pelo cliente para que ele receba o aviso.</p><div className="mt-4 grid gap-3 md:grid-cols-2">{orders.filter((order) => order.status === "awaiting_appointment" && order.appointment_requested_at).map((order) => <article key={order.id} className="rounded-lg border border-emerald-500/30 bg-black/30 p-4"><b>O.S. #{order.number} · {order.clients?.full_name}</b><p className="mt-2 text-sm text-zinc-200">{new Date(order.appointment_requested_at!).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={saving} onClick={() => void confirmAppointment(order)} className="rounded-lg bg-emerald-500 px-4 py-2 font-bold text-black disabled:opacity-60">Confirmar agendamento</button><button type="button" onClick={() => void edit(order)} className="rounded-lg border border-zinc-500 px-4 py-2 font-bold text-zinc-100">Abrir O.S.</button></div></article>)}</div></section>}
     <section className="min-w-0 rounded-xl border border-zinc-800 bg-[#1A1A1A] p-4 sm:p-5">
-      <form id="service-order-form" ref={formRef} onSubmit={save} onInvalidCapture={(event) => { const field = event.target as HTMLElement; const section = field.closest("details"); if (section) section.open = true; }}>
+      <form id="service-order-form" ref={formRef} onSubmit={save} onChangeCapture={() => { userTouched.current = true; }} onInvalidCapture={(event) => { const field = event.target as HTMLElement; const section = field.closest("details"); if (section) section.open = true; }}>
       <div className="mb-4 rounded-xl border border-zinc-700 bg-black/30 p-4">
         <p className="text-xs font-bold uppercase tracking-widest text-[#FFC107]">{selected ? `O.S. #${selected.number}` : "Novo atendimento"}</p>
         <h2 className="mt-2 text-xl font-bold break-words">{clients.find(item => item.id === client)?.full_name || "Selecione o cliente"}</h2>
@@ -172,7 +210,7 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
           <label className="text-sm text-zinc-300">Observações<textarea className="field mt-1 min-h-24" value={note} onChange={(event) => setNote(event.target.value)} /></label>
         </div>
       </details>
-      <OrderMileagePhotos key={selected?.id || "new"} workshopId={workshopId} orderId={selected?.id} drafts={mileageDrafts} disabled={saving} refresh={photoRefresh} onDraft={(kind, file) => setMileageDrafts(current => ({ ...current, [kind]: file }))} onSavedPhoto={kind => setMileageDrafts(current => { const next = { ...current }; delete next[kind]; return next; })} />
+      <OrderMileagePhotos key={selected?.id || "new"} workshopId={workshopId} orderId={selected?.id} drafts={mileageDrafts} onBeforeCapture={()=>preserveCameraDraft()} disabled={saving} refresh={photoRefresh} onDraft={(kind, file) => setMileageDrafts(current => ({ ...current, [kind]: file }))} onSavedPhoto={kind => setMileageDrafts(current => { const next = { ...current }; delete next[kind]; return next; })} />
       {message && <p className="mt-3 text-sm text-[#FFC107]">{message}</p>}
       {selected?.status === "awaiting_appointment" && selected.appointment_requested_at && <div className="mt-4 rounded-lg border border-emerald-500/60 bg-emerald-500/10 p-4"><p className="text-sm text-zinc-200">Data solicitada pelo cliente: <b>{new Date(selected.appointment_requested_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</b></p><button type="button" disabled={saving} onClick={() => void confirmAppointment(selected)} className="mt-3 rounded-lg bg-emerald-500 px-4 py-2 font-bold text-black disabled:opacity-60">Confirmar agendamento</button></div>}
       </form>
@@ -185,7 +223,7 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
       </div> : <p className="mt-4 text-sm text-zinc-400">Salve a O.S. para adicionar serviços, peças e fotos.</p>}
       <div className="mt-5 rounded-xl border border-zinc-600 bg-[#171717] p-3 shadow-xl">
         <p role="status" className="mb-2 text-xs text-zinc-300">{dirty ? "Alterações ainda não salvas" : selected ? "Dados do atendimento salvos" : "Preencha os dados do atendimento"}</p>
-        <div className="flex flex-wrap gap-2"><button type="submit" form="service-order-form" disabled={saving} className="min-h-12 flex-1 rounded-lg bg-[#FFC107] px-4 py-3 font-bold text-black disabled:opacity-60">{saving ? "Salvando…" : "Salvar O.S."}</button><a href="/app" onClick={(event) => { if (dirty && !window.confirm("Sair sem salvar as alterações da O.S.?")) event.preventDefault(); }} className="rounded-lg border border-zinc-600 px-4 py-3 text-sm font-bold">Voltar ao menu</a></div>
+        <div className="flex flex-wrap gap-2"><button type="submit" form="service-order-form" disabled={saving} className="min-h-12 flex-1 rounded-lg bg-[#FFC107] px-4 py-3 font-bold text-black disabled:opacity-60">{saving ? "Salvando…" : "Salvar O.S."}</button><a href="/app" onClick={(event) => { if (dirty && !window.confirm("Sair sem salvar as alterações da O.S.?")) event.preventDefault(); else clearCameraDraft(); }} className="rounded-lg border border-zinc-600 px-4 py-3 text-sm font-bold">Voltar ao menu</a></div>
       </div>
     </section>
     <section><div className="rounded-xl border border-[#FFC107]/60 bg-[#211805] p-5"><h2 className="text-xl font-semibold text-[#FFC107]">Solicitações dos clientes</h2><p className="mt-1 text-sm text-zinc-300">Aceite para criar a O.S. e iniciar o orçamento. O cliente recebe a confirmação no aplicativo.</p><div className="mt-4 space-y-3">{requests.length === 0 && <p className="text-sm text-zinc-400">Nenhuma solicitação nova.</p>}{requests.map((request) => <article key={request.id} className="rounded-lg border border-[#6b510d] bg-black/30 p-4"><b>{request.clients?.full_name || "Cliente"}</b><small className="mt-1 block text-zinc-400">{request.vehicles?.brand} {request.vehicles?.model} · {request.vehicles?.plate || "sem placa"}</small><p className="mt-3 text-sm text-zinc-200">{request.complaint}</p><div className="mt-4 flex flex-wrap gap-3"><button type="button" disabled={saving} onClick={() => void acceptRequest(request)} className="rounded-lg bg-[#FFC107] px-4 py-2 font-bold text-black disabled:opacity-60">Aceitar e criar O.S.</button><button type="button" disabled={saving} onClick={() => void declineRequest(request)} className="rounded-lg border border-red-500/70 px-4 py-2 font-bold text-red-300 disabled:opacity-60">Recusar</button></div></article>)}</div></div><h2 className="mt-7 text-xl font-semibold">Ordens de serviço</h2><p className="mt-1 text-sm text-zinc-400">Toque em Editar O.S. para abrir o atendimento e fazer alterações.</p><div className="mt-4 space-y-3">{orders.map((order) => <article key={order.id} className="rounded-xl border border-zinc-800 bg-[#171717] p-4"><div className="flex flex-wrap justify-between gap-3"><span><b>O.S. #{order.number}</b> · {order.clients?.full_name}<br /><small className="text-zinc-500">{order.vehicles?.brand} {order.vehicles?.model} · {order.vehicles?.plate || "sem placa"}</small></span><b className={order.status === "cancelled" ? "text-red-400" : order.status === "repairing" || order.status === "finished" || order.status === "delivered" ? "text-emerald-400" : "text-[#FFC107]"}>{states.find((item) => item[0] === order.status)?.[1]}</b></div><div className="mt-4 flex flex-wrap gap-3"><button type="button" onClick={() => void edit(order)} className="rounded-lg bg-[#FFC107] px-4 py-2 font-bold text-black">Editar O.S.</button><button type="button" onClick={() => void remove(order)} className="rounded-lg border border-red-500/70 px-4 py-2 font-bold text-red-300">Excluir O.S.</button></div></article>)}</div></section>
