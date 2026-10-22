@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {test} from 'node:test';
+import {readFileSync} from 'node:fs';
+import ts from 'typescript';
+const js=ts.transpileModule(readFileSync(new URL('../src/lib/service-order-draft.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
+const m={exports:{}};new Function('exports','module',js)(m.exports,m);const {parseOrderDraft,orderDraftKey}=m.exports;
+const data={selectedId:'saved-order',client:'client',vehicle:'vehicle',status:'open',complaint:'Vazamento de óleo',diagnosis:'Diagnóstico',note:'Observação',savedAt:100000000};
+test('restore keeps the existing order identity and all typed fields',()=>assert.deepEqual(parseOrderDraft(JSON.stringify(data),data.savedAt+1000),data));
+test('drafts are scoped to the signed-in user and workshop',()=>{assert.notEqual(orderDraftKey('workshop','user-a'),orderDraftKey('workshop','user-b'));assert.notEqual(orderDraftKey('workshop-a','user'),orderDraftKey('workshop-b','user'));});
+test('corrupt, expired or malformed drafts are ignored',()=>{for(const raw of ['broken',JSON.stringify({...data,savedAt:1}),JSON.stringify({...data,complaint:99}),JSON.stringify({...data,selectedId:42})])assert.equal(parseOrderDraft(raw,data.savedAt+1000),null);});
