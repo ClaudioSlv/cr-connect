@@ -38,8 +38,28 @@ export function PrintDocument({ type, number, client, vehicle, status, items, no
     if (type === "Ordem de Serviço") {
       generating.current = true; setBusy(true);
       try {
-        const { createOrderPdf } = await import("@/lib/order-pdf");
-        const pdf = createOrderPdf({ number, client, vehicle, status, items, note, payment });
+        const { createOrderPdf, finishOrderPdf, loadPdfImage } = await import("@/lib/order-pdf");
+        const portalUrl = `${appUrl}/app/minhas-os`;
+        const subtotal = items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price) - Number(item.discount || 0), 0);
+        const { total } = paymentTotals(subtotal, payment?.surcharge_percent || 0);
+        const [logoResult, pixResult, appResult, checkoutResult] = await Promise.allSettled([
+          loadPdfImage(`${window.location.origin}/brand/cr-reparador.jpg`),
+          QRCode.toDataURL(createPixPayload(total, number), { width: 220, margin: 1 }),
+          QRCode.toDataURL(portalUrl, { width: 220, margin: 1 }),
+          payment && ["credit_card", "debit_card", "combined"].includes(payment.payment_method) && total > 0
+            ? fetch("/api/checkout-orcamento", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({amount:total,budgetNumber:`OS-${number}`,client}),signal:AbortSignal.timeout(8000)}).then(async response => {
+              if (!response.ok) return undefined;
+              const result = await response.json();
+              return typeof result.publicUrl === "string" && result.publicUrl.startsWith(`${window.location.origin}/p/`) ? result.publicUrl as string : undefined;
+            }) : Promise.resolve(undefined),
+        ]);
+        const pdf = createOrderPdf({ number, client, vehicle, status, items, note, payment }, {
+          logo:logoResult.status === "fulfilled" ? logoResult.value.data : undefined,
+          pixQr:pixResult.status === "fulfilled" ? pixResult.value : undefined,
+          appQr:appResult.status === "fulfilled" ? appResult.value : undefined,
+          checkoutUrl:checkoutResult.status === "fulfilled" ? checkoutResult.value : undefined,
+          portalUrl,
+        });
         if (orderId) {
           let timer: ReturnType<typeof setTimeout> | undefined;
           try {
@@ -49,9 +69,10 @@ export function PrintDocument({ type, number, client, vehicle, status, items, no
               const { addMileageToPdf } = await import("@/lib/order-pdf");
               await addMileageToPdf(pdf, photo.url, mileagePhotoLabels[photo.attachment_kind], photo.created_at);
             }
-          } catch { pdf.addPage(); pdf.text("Fotos indisponíveis. Consulte o registro de KM no aplicativo.", 18, 20); }
+          } catch { pdf.addPage(); pdf.setFontSize(9); pdf.setTextColor("#262626"); pdf.text("Fotos indisponíveis. Consulte o registro de KM no aplicativo.", 18, 20); }
           finally { clearTimeout(timer); }
         }
+        finishOrderPdf(pdf);
         // Keep a visible download link for browsers that block automatic downloads.
         const url = URL.createObjectURL(pdf.output("blob"));
         setDownloadUrl(url);
