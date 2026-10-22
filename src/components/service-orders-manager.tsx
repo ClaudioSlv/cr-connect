@@ -3,6 +3,8 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { OrderItemsPanel } from "@/components/order-items-panel";
+import { OrderMileagePhotos } from "@/components/order-mileage-photos";
+import { uploadMileagePhoto, mileagePhotoLabels, type MileageDrafts, type MileagePhotoKind } from "@/lib/mileage-photos";
 import { PaymentTermsPanel } from "@/components/payment-terms-panel";
 import { paymentTotals, type PaymentData } from "@/lib/payment-terms";
 import { PrintDocument } from "@/components/print-document";
@@ -34,10 +36,12 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [mileageDrafts, setMileageDrafts] = useState<MileageDrafts>({});
+  const [photoRefresh, setPhotoRefresh] = useState(0);
   const [payment, setPayment] = useState<PaymentData | null>(null);
-  const dirty = selected
+  const dirty = Object.keys(mileageDrafts).length > 0 || (selected
     ? client !== selected.client_id || vehicle !== selected.vehicle_id || status !== selected.status || complaint !== selected.customer_complaint || diagnosis !== (selected.diagnosis || "") || note !== (selected.notes || "")
-    : Boolean(client || vehicle || complaint || diagnosis || note || status !== "open");
+    : Boolean(client || vehicle || complaint || diagnosis || note || status !== "open"));
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -84,17 +88,24 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
     const result = selected
       ? await db.from("service_orders").update(payload).eq("id", selected.id).select(selection).single()
       : await db.from("service_orders").insert(payload).select(selection).single();
-    setSaving(false);
-    if (result.error) { setMessage(result.error.message); return; }
+    if (result.error) { setSaving(false); setMessage(result.error.message); return; }
     const savedOrder = result.data as unknown as Order;
     setSelected(savedOrder);
+    const failed: MileageDrafts = {};
+    const photoErrors: string[] = [];
+    for (const [kind, file] of Object.entries(mileageDrafts) as [MileagePhotoKind, File][]) {
+      try { await uploadMileagePhoto(workshopId, savedOrder.id, kind, file); }
+      catch (error) { failed[kind] = file; photoErrors.push(`${mileagePhotoLabels[kind]}: ${error instanceof Error ? error.message : "envio falhou"}`); }
+    }
+    setMileageDrafts(failed); setPhotoRefresh(value => value + 1); setSaving(false);
+    if (photoErrors.length) { setMessage(`O.S. salva, mas há foto pendente. Toque em Salvar O.S. para tentar novamente. ${photoErrors.join("; ")}`); await load(); return; }
     setMessage(`O.S. #${savedOrder.number} salva. Use “Gerar PDF” para baixar ou compartilhar com o cliente.`);
     await load();
   }
 
   async function edit(order: Order) {
     if (dirty && !window.confirm("Descartar as alterações não salvas para abrir outra O.S.?")) return;
-    setPayment(null); setSelected(order); setOrderItems([]); setClient(order.client_id); setVehicle(order.vehicle_id); setStatus(order.status); setComplaint(order.customer_complaint); setDiagnosis(order.diagnosis || ""); setNote(order.notes || ""); setMessage(`O.S. #${order.number} aberta para edição.`);
+    setMileageDrafts({}); setPayment(null); setSelected(order); setOrderItems([]); setClient(order.client_id); setVehicle(order.vehicle_id); setStatus(order.status); setComplaint(order.customer_complaint); setDiagnosis(order.diagnosis || ""); setNote(order.notes || ""); setMessage(`O.S. #${order.number} aberta para edição.`);
     const { data } = await db.from("service_order_items").select("description,quantity,unit_price,discount").eq("workshop_id", workshopId).eq("service_order_id", order.id);
     setOrderItems((data || []) as OrderItem[]);
     window.setTimeout(() => { const section = formRef.current?.querySelector("details"); if (section) section.open = true; formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 80);
@@ -104,7 +115,7 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
     if (!window.confirm(`Excluir a O.S. #${order.number} de ${order.clients?.full_name || "cliente"}? Esta ação não pode ser desfeita.`)) return;
     const { error } = await db.from("service_orders").delete().eq("id", order.id).eq("workshop_id", workshopId);
     if (error) { setMessage(error.message); return; }
-    if (selected?.id === order.id) { setSelected(null); setOrderItems([]); setClient(""); setVehicle(""); setStatus("open"); setComplaint(""); setDiagnosis(""); setNote(""); }
+    if (selected?.id === order.id) { setMileageDrafts({}); setSelected(null); setOrderItems([]); setClient(""); setVehicle(""); setStatus("open"); setComplaint(""); setDiagnosis(""); setNote(""); }
     setMessage(`O.S. #${order.number} excluída.`);
     await load();
   }
@@ -153,14 +164,15 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
       <details name="order-editor" open className="rounded-xl border border-zinc-700 bg-black/20 p-4">
         <summary className="cursor-pointer font-bold text-zinc-100">Dados do atendimento</summary>
         <div className="mt-4 grid gap-4">
-          <label className="text-sm text-zinc-300">Cliente *<select required className="field mt-1" value={client} onChange={(event) => { setClient(event.target.value); setVehicle(""); }}><option value="">Selecione o cliente</option>{clients.map((item) => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select></label>
-          <label className="text-sm text-zinc-300">Veículo *<select required className="field mt-1" disabled={!client} value={vehicle} onChange={(event) => setVehicle(event.target.value)}><option value="">Selecione o veículo</option>{allowed.map((item) => <option key={item.id} value={item.id}>{item.brand} {item.model} {item.plate ? `(${item.plate})` : ""}</option>)}</select></label>
+          <label className="text-sm text-zinc-300">Cliente *<select required className="field mt-1" value={client} onChange={(event) => { setClient(event.target.value); setVehicle(""); setMileageDrafts({}); }}><option value="">Selecione o cliente</option>{clients.map((item) => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select></label>
+          <label className="text-sm text-zinc-300">Veículo *<select required className="field mt-1" disabled={!client} value={vehicle} onChange={(event) => { setVehicle(event.target.value); setMileageDrafts({}); }}><option value="">Selecione o veículo</option>{allowed.map((item) => <option key={item.id} value={item.id}>{item.brand} {item.model} {item.plate ? `(${item.plate})` : ""}</option>)}</select></label>
           <label className="text-sm text-zinc-300">Situação do atendimento<select className="field mt-1" value={status} onChange={(event) => setStatus(event.target.value)}>{states.map((item) => <option key={item[0]} value={item[0]}>{item[1]}</option>)}</select></label>
           <label className="text-sm text-zinc-300">Defeito relatado pelo cliente *<textarea required className="field mt-1 min-h-28" value={complaint} onChange={(event) => setComplaint(event.target.value)} /></label>
           <label className="text-sm text-zinc-300">Diagnóstico da oficina<textarea className="field mt-1 min-h-24" value={diagnosis} onChange={(event) => setDiagnosis(event.target.value)} /></label>
           <label className="text-sm text-zinc-300">Observações<textarea className="field mt-1 min-h-24" value={note} onChange={(event) => setNote(event.target.value)} /></label>
         </div>
       </details>
+      <OrderMileagePhotos key={selected?.id || "new"} workshopId={workshopId} orderId={selected?.id} drafts={mileageDrafts} disabled={saving} refresh={photoRefresh} onDraft={(kind, file) => setMileageDrafts(current => ({ ...current, [kind]: file }))} onSavedPhoto={kind => setMileageDrafts(current => { const next = { ...current }; delete next[kind]; return next; })} />
       {message && <p className="mt-3 text-sm text-[#FFC107]">{message}</p>}
       {selected?.status === "awaiting_appointment" && selected.appointment_requested_at && <div className="mt-4 rounded-lg border border-emerald-500/60 bg-emerald-500/10 p-4"><p className="text-sm text-zinc-200">Data solicitada pelo cliente: <b>{new Date(selected.appointment_requested_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</b></p><button type="button" disabled={saving} onClick={() => void confirmAppointment(selected)} className="mt-3 rounded-lg bg-emerald-500 px-4 py-2 font-bold text-black disabled:opacity-60">Confirmar agendamento</button></div>}
       </form>
@@ -169,7 +181,7 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
       {selected ? <div key={selected.id} className="mt-4 space-y-3">
         <details name="order-editor" className="rounded-xl border border-zinc-700 bg-black/20 p-4"><summary className="cursor-pointer font-bold">Serviços e peças · R$ {orderTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</summary><p className="mt-3 text-xs text-zinc-400">Os itens são salvos ao adicionar ou remover.</p><OrderItemsPanel workshopId={workshopId} orderId={selected.id} status={status} surchargePercent={payment?.surcharge_percent || 0} onItemsChange={setOrderItems} /></details>
         <details name="order-editor" className="rounded-xl border border-zinc-700 bg-black/20 p-4"><summary className="cursor-pointer font-bold">Fotos e documentos</summary><AttachmentsManager workshopId={workshopId} orderId={selected.id} /></details>
-        <details name="order-editor" className="rounded-xl border border-zinc-700 bg-black/20 p-4"><summary className="cursor-pointer font-bold">Compartilhar O.S.</summary><p className="mt-3 text-sm text-zinc-400">{dirty ? "Salve as alterações antes de gerar o documento." : "Baixe o PDF e anexe na conversa do WhatsApp."}</p><div className="mt-3 flex flex-wrap gap-2">{!dirty && <><PrintDocument type="Ordem de Serviço" number={`#${selected.number}`} client={selected.clients?.full_name || "Cliente"} vehicle={`${selected.vehicles?.brand || ""} ${selected.vehicles?.model || ""} ${selected.vehicles?.plate || ""}`} status={states.find((item) => item[0] === status)?.[1] || status} note={note || complaint} items={orderItems} payment={payment} disabled={!payment} /><button type="button" onClick={sendWhatsApp} className="rounded-lg border border-emerald-500/70 px-4 py-3 text-sm font-bold text-emerald-300">Enviar no WhatsApp</button></>}</div></details>
+        <details name="order-editor" className="rounded-xl border border-zinc-700 bg-black/20 p-4"><summary className="cursor-pointer font-bold">Compartilhar O.S.</summary><p className="mt-3 text-sm text-zinc-400">{dirty ? "Salve as alterações antes de gerar o documento." : "Baixe o PDF e anexe na conversa do WhatsApp."}</p><div className="mt-3 flex flex-wrap gap-2">{!dirty && <><PrintDocument type="Ordem de Serviço" number={`#${selected.number}`} client={selected.clients?.full_name || "Cliente"} vehicle={`${selected.vehicles?.brand || ""} ${selected.vehicles?.model || ""} ${selected.vehicles?.plate || ""}`} status={states.find((item) => item[0] === status)?.[1] || status} note={note || complaint} items={orderItems} orderId={selected.id} payment={payment} disabled={!payment} /><button type="button" onClick={sendWhatsApp} className="rounded-lg border border-emerald-500/70 px-4 py-3 text-sm font-bold text-emerald-300">Enviar no WhatsApp</button></>}</div></details>
       </div> : <p className="mt-4 text-sm text-zinc-400">Salve a O.S. para adicionar serviços, peças e fotos.</p>}
       <div className="mt-5 rounded-xl border border-zinc-600 bg-[#171717] p-3 shadow-xl">
         <p role="status" className="mb-2 text-xs text-zinc-300">{dirty ? "Alterações ainda não salvas" : selected ? "Dados do atendimento salvos" : "Preencha os dados do atendimento"}</p>

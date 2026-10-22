@@ -25,7 +25,7 @@ export function AttachmentsManager({ workshopId, orderId }: { workshopId: string
   const [loading, setLoading] = useState(false);
 
   async function load() {
-    const { data } = await db.from("attachments").select("id,file_name,mime_type,size_bytes,storage_path").eq("workshop_id", workshopId).eq("service_order_id", orderId).order("created_at", { ascending: false });
+    const { data } = await db.from("attachments").select("id,file_name,mime_type,size_bytes,storage_path").eq("workshop_id", workshopId).eq("service_order_id", orderId).eq("attachment_kind", "general").order("created_at", { ascending: false });
     const withUrls = await Promise.all((data || []).map(async (item) => {
       const { data: signed } = await db.storage.from(bucket).createSignedUrl(item.storage_path, 3600);
       return { ...item, url: signed?.signedUrl };

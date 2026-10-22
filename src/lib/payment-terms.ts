@@ -1,5 +1,5 @@
 export type PaymentAcceptance = { at: string; source: "client_portal" | "workshop_record"; total: number };
-export type PaymentData = { payment_method: string; payment_terms: string; surcharge_percent: number; subtotal: number; total: number; revision: string; acceptance: PaymentAcceptance | null };
+export type PaymentData = { payment_method: string; payment_terms: string; surcharge_percent: number; surcharge_reason: string; subtotal: number; total: number; revision: string; acceptance: PaymentAcceptance | null };
 export const paymentMethods = [["not_defined", "A combinar"], ["pix", "Pix"], ["cash", "Dinheiro"], ["debit_card", "Cartão de débito"], ["credit_card", "Cartão de crédito"], ["combined", "Pagamento combinado"]] as const;
 export const defaultPaymentTerms = "Pagamento na entrega do veículo. Não trabalhamos fiado. Parcelamento somente no cartão, conforme combinado antes do serviço.";
 export const paymentMethodLabel = (value: string) => paymentMethods.find(([key]) => key === value)?.[1] || value;
