@@ -9,7 +9,7 @@ begin
   insert into public.budgets(workshop_id,client_id,vehicle_id,status) values(fixture.workshop_id,fixture.client_id,fixture.vehicle_id,'draft') returning id into bid;
   insert into public.budget_items(workshop_id,budget_id,kind,description,quantity,unit_price,discount) values(fixture.workshop_id,bid,'service','Teste transacional de pagamento',1,700,0) returning id into line;
   details=public.get_document_payment_terms('budget',bid);
-  details=public.save_document_payment_terms('budget',bid,'credit_card','Pagamento na entrega. Parcelamento no cartão.',14.3,(details->>'revision')::uuid);
+  details=public.save_document_payment_terms('budget',bid,'credit_card','Pagamento na entrega. Parcelamento no cartão.',14.3,(details->>'revision')::uuid,'Parcelamento combinado');
   assert (details->>'total')::numeric=800.10,'Total incorreto';
   rejected=false;
   begin perform public.save_document_payment_terms('budget',bid,'cash','Teste',-1,(details->>'revision')::uuid); exception when others then rejected=true; end;
@@ -39,7 +39,7 @@ begin
   assert details->'acceptance'->>'source'='client_portal','Aceite do cliente não registrado';
   assert (select status='approved' from public.budgets where id=bid),'Aprovação não concluída';
   perform set_config('request.jwt.claim.sub',staff::text,true);
-  details=public.save_document_payment_terms('budget',bid,'cash','Novas condições',15,(details->>'revision')::uuid);
+  details=public.save_document_payment_terms('budget',bid,'cash','Novas condições',15,(details->>'revision')::uuid,'Novo acordo');
   assert details->'acceptance'='null'::jsonb,'Aceite mantido para condições alteradas';
   assert (select status='draft' from public.budgets where id=bid),'Orçamento alterado continuou aprovado';
   perform set_config('request.jwt.claim.sub',gen_random_uuid()::text,true);
@@ -50,7 +50,7 @@ begin
   insert into public.service_orders(workshop_id,client_id,vehicle_id,status,customer_complaint) values(fixture.workshop_id,fixture.client_id,fixture.vehicle_id,'open','Teste transacional') returning id into oid;
   insert into public.service_order_items(workshop_id,service_order_id,kind,description,quantity,unit_price,discount) values(fixture.workshop_id,oid,'service','Teste',1,700,0);
   details=public.get_document_payment_terms('order',oid);
-  details=public.save_document_payment_terms('order',oid,'cash','Pagamento na entrega.',14.3,(details->>'revision')::uuid);
+  details=public.save_document_payment_terms('order',oid,'cash','Pagamento na entrega.',14.3,(details->>'revision')::uuid,'Parcelamento combinado');
   rejected=false;
   begin update public.service_orders set status='repairing' where id=oid; exception when others then rejected=true; end;
   assert rejected,'Reparo iniciado sem aceite';
