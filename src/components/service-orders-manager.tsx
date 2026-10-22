@@ -109,7 +109,7 @@ export function ServiceOrdersManager({ workshopId, userId }: { workshopId: strin
     const number = (contact || "").replace(/\D/g, "");
     if (!number) { setMessage("Cadastre o WhatsApp ou telefone do cliente antes de enviar."); return; }
     const international = number.startsWith("55") ? number : `55${number}`;
-    const text = `Olá, ${selected.clients?.full_name || "cliente"}! A O.S. #${selected.number} foi atualizada. Valor atual: R$ ${orderTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}. Condições: ${payment.payment_terms || "A combinar"}. Vou enviar o PDF em seguida.`;
+    const text = `Olá, ${selected.clients?.full_name || "cliente"}! Segue a O.S. #${selected.number} para sua conferência. Valor total: R$ ${orderTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}. Condições: ${payment.payment_terms || "A combinar"}. Vou enviar o PDF em seguida. Para conferir e aceitar as condições, acesse com seu cadastro: https://cr-connect-ic3w.vercel.app/app/minhas-os`;
     window.open(`https://wa.me/${international}?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
   }
 
