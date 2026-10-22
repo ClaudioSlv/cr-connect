@@ -3,6 +3,8 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { OrderItemsPanel } from "@/components/order-items-panel";
+import { PaymentTermsPanel } from "@/components/payment-terms-panel";
+import { paymentTotals, type PaymentData } from "@/lib/payment-terms";
 import { PrintDocument } from "@/components/print-document";
 import { OrderStatusTimeline } from "@/components/order-status-timeline";
 import { AttachmentsManager } from "@/components/attachments-manager";
@@ -32,6 +34,7 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [payment, setPayment] = useState<PaymentData | null>(null);
   const dirty = selected
     ? client !== selected.client_id || vehicle !== selected.vehicle_id || status !== selected.status || complaint !== selected.customer_complaint || diagnosis !== (selected.diagnosis || "") || note !== (selected.notes || "")
     : Boolean(client || vehicle || complaint || diagnosis || note || status !== "open");
@@ -41,7 +44,9 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
-  const orderTotal = orderItems.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price) - Number(item.discount || 0), 0);
+  const orderSubtotal = orderItems.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price) - Number(item.discount || 0), 0);
+
+  const orderTotal = paymentTotals(orderSubtotal, payment?.surcharge_percent || 0).total;
 
   async function load() {
     const [clientResult, vehicleResult, orderResult, requestResult] = await Promise.all([
@@ -60,12 +65,12 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
   const allowed = vehicles.filter((item) => item.client_id === client);
 
   function sendWhatsApp() {
-    if (!selected) return;
+    if (!selected || !payment) { setMessage("Confira e salve as condições de pagamento antes de compartilhar."); return; }
     const contact = selected.clients?.whatsapp || selected.clients?.phone;
     const number = (contact || "").replace(/\D/g, "");
     if (!number) { setMessage("Cadastre o WhatsApp ou telefone do cliente antes de enviar."); return; }
     const international = number.startsWith("55") ? number : `55${number}`;
-    const text = `Olá, ${selected.clients?.full_name || "cliente"}! A O.S. #${selected.number} foi atualizada. Valor atual: R$ ${orderTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}. Vou enviar o PDF em seguida.`;
+    const text = `Olá, ${selected.clients?.full_name || "cliente"}! A O.S. #${selected.number} foi atualizada. Valor atual: R$ ${orderTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}. Condições: ${payment.payment_terms || "A combinar"}. Vou enviar o PDF em seguida.`;
     window.open(`https://wa.me/${international}?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
   }
 
@@ -89,7 +94,7 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
 
   async function edit(order: Order) {
     if (dirty && !window.confirm("Descartar as alterações não salvas para abrir outra O.S.?")) return;
-    setSelected(order); setOrderItems([]); setClient(order.client_id); setVehicle(order.vehicle_id); setStatus(order.status); setComplaint(order.customer_complaint); setDiagnosis(order.diagnosis || ""); setNote(order.notes || ""); setMessage(`O.S. #${order.number} aberta para edição.`);
+    setPayment(null); setSelected(order); setOrderItems([]); setClient(order.client_id); setVehicle(order.vehicle_id); setStatus(order.status); setComplaint(order.customer_complaint); setDiagnosis(order.diagnosis || ""); setNote(order.notes || ""); setMessage(`O.S. #${order.number} aberta para edição.`);
     const { data } = await db.from("service_order_items").select("description,quantity,unit_price,discount").eq("workshop_id", workshopId).eq("service_order_id", order.id);
     setOrderItems((data || []) as OrderItem[]);
     window.setTimeout(() => { const section = formRef.current?.querySelector("details"); if (section) section.open = true; formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 80);
@@ -159,11 +164,12 @@ export function ServiceOrdersManager({ workshopId }: { workshopId: string }) {
       {message && <p className="mt-3 text-sm text-[#FFC107]">{message}</p>}
       {selected?.status === "awaiting_appointment" && selected.appointment_requested_at && <div className="mt-4 rounded-lg border border-emerald-500/60 bg-emerald-500/10 p-4"><p className="text-sm text-zinc-200">Data solicitada pelo cliente: <b>{new Date(selected.appointment_requested_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</b></p><button type="button" disabled={saving} onClick={() => void confirmAppointment(selected)} className="mt-3 rounded-lg bg-emerald-500 px-4 py-2 font-bold text-black disabled:opacity-60">Confirmar agendamento</button></div>}
       </form>
+      {selected && <PaymentTermsPanel key={selected.id} kind="order" id={selected.id} subtotal={orderSubtotal} version={JSON.stringify(orderItems)} onChange={setPayment} />}
       {selected && <div className="my-4 rounded-xl border border-zinc-700 bg-black/20 p-4"><h3 className="text-sm font-bold">Acompanhamento da O.S.</h3><OrderStatusTimeline status={selected.status} />{dirty && status !== selected.status && <p className="mt-2 text-xs text-[#FFC107]">A nova situação será aplicada ao salvar.</p>}</div>}
       {selected ? <div key={selected.id} className="mt-4 space-y-3">
-        <details name="order-editor" className="rounded-xl border border-zinc-700 bg-black/20 p-4"><summary className="cursor-pointer font-bold">Serviços e peças · R$ {orderTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</summary><p className="mt-3 text-xs text-zinc-400">Os itens são salvos ao adicionar ou remover.</p><OrderItemsPanel workshopId={workshopId} orderId={selected.id} status={status} onItemsChange={setOrderItems} /></details>
+        <details name="order-editor" className="rounded-xl border border-zinc-700 bg-black/20 p-4"><summary className="cursor-pointer font-bold">Serviços e peças · R$ {orderTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</summary><p className="mt-3 text-xs text-zinc-400">Os itens são salvos ao adicionar ou remover.</p><OrderItemsPanel workshopId={workshopId} orderId={selected.id} status={status} surchargePercent={payment?.surcharge_percent || 0} onItemsChange={setOrderItems} /></details>
         <details name="order-editor" className="rounded-xl border border-zinc-700 bg-black/20 p-4"><summary className="cursor-pointer font-bold">Fotos e documentos</summary><AttachmentsManager workshopId={workshopId} orderId={selected.id} /></details>
-        <details name="order-editor" className="rounded-xl border border-zinc-700 bg-black/20 p-4"><summary className="cursor-pointer font-bold">Compartilhar O.S.</summary><p className="mt-3 text-sm text-zinc-400">{dirty ? "Salve as alterações antes de gerar o documento." : "Baixe o PDF e anexe na conversa do WhatsApp."}</p><div className="mt-3 flex flex-wrap gap-2">{!dirty && <><PrintDocument type="Ordem de Serviço" number={`#${selected.number}`} client={selected.clients?.full_name || "Cliente"} vehicle={`${selected.vehicles?.brand || ""} ${selected.vehicles?.model || ""} ${selected.vehicles?.plate || ""}`} status={states.find((item) => item[0] === status)?.[1] || status} note={note || complaint} items={orderItems} /><button type="button" onClick={sendWhatsApp} className="rounded-lg border border-emerald-500/70 px-4 py-3 text-sm font-bold text-emerald-300">Enviar no WhatsApp</button></>}</div></details>
+        <details name="order-editor" className="rounded-xl border border-zinc-700 bg-black/20 p-4"><summary className="cursor-pointer font-bold">Compartilhar O.S.</summary><p className="mt-3 text-sm text-zinc-400">{dirty ? "Salve as alterações antes de gerar o documento." : "Baixe o PDF e anexe na conversa do WhatsApp."}</p><div className="mt-3 flex flex-wrap gap-2">{!dirty && <><PrintDocument type="Ordem de Serviço" number={`#${selected.number}`} client={selected.clients?.full_name || "Cliente"} vehicle={`${selected.vehicles?.brand || ""} ${selected.vehicles?.model || ""} ${selected.vehicles?.plate || ""}`} status={states.find((item) => item[0] === status)?.[1] || status} note={note || complaint} items={orderItems} payment={payment} disabled={!payment} /><button type="button" onClick={sendWhatsApp} className="rounded-lg border border-emerald-500/70 px-4 py-3 text-sm font-bold text-emerald-300">Enviar no WhatsApp</button></>}</div></details>
       </div> : <p className="mt-4 text-sm text-zinc-400">Salve a O.S. para adicionar serviços, peças e fotos.</p>}
       <div className="mt-5 rounded-xl border border-zinc-600 bg-[#171717] p-3 shadow-xl">
         <p role="status" className="mb-2 text-xs text-zinc-300">{dirty ? "Alterações ainda não salvas" : selected ? "Dados do atendimento salvos" : "Preencha os dados do atendimento"}</p>
