@@ -3,14 +3,13 @@
 import { loadMileagePhotos, mileagePhotoLabels } from "@/lib/mileage-photos";
 import { paymentMethodLabel, paymentTotals, type PaymentData } from "@/lib/payment-terms";
 import QRCode from "qrcode";
+import { createPixPayload } from "@/lib/pix";
 import { useEffect, useRef, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 type Line = { description: string; quantity: number; unit_price: number; discount?: number };
 type Props = { type: "Orçamento" | "Ordem de Serviço"; number: string; client: string; vehicle: string; status: string; items: Line[]; note?: string | null; payment?: PaymentData | null; disabled?: boolean; orderId?: string };
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const appUrl = "https://cr-connect-ic3w.vercel.app";
-const pixKey = "+5513991320205";
 
 export function PrintDocument({ type, number, client, vehicle, status, items, note, payment, disabled, orderId }: Props) {
   const [busy, setBusy] = useState(false);
@@ -18,19 +17,6 @@ export function PrintDocument({ type, number, client, vehicle, status, items, no
   const [downloadUrl, setDownloadUrl] = useState("");
   useEffect(() => () => { if (downloadUrl) URL.revokeObjectURL(downloadUrl); }, [downloadUrl]);
   const [message, setMessage] = useState("");
-  const [pixDiscountPercentage, setPixDiscountPercentage] = useState(7);
-
-  useEffect(() => {
-    async function loadPixDiscount() {
-      const db = createClient();
-      const { data: { user } } = await db.auth.getUser(); if (!user) return;
-      const { data: membership } = await db.from("workshop_users").select("workshop_id").eq("user_id", user.id).limit(1).maybeSingle();
-      if (!membership) return;
-      const { data: workshop } = await db.from("workshops").select("pix_discount_percentage").eq("id", membership.workshop_id).maybeSingle();
-      const value = Number(workshop?.pix_discount_percentage); if (Number.isFinite(value) && value >= 0 && value <= 100) setPixDiscountPercentage(value);
-    }
-    void loadPixDiscount();
-  }, []);
 
   async function print() {
     if (generating.current) return;
@@ -41,7 +27,7 @@ export function PrintDocument({ type, number, client, vehicle, status, items, no
         const { createOrderPdf, finishOrderPdf, loadPdfImage } = await import("@/lib/order-pdf");
         const portalUrl = `${appUrl}/app/minhas-os`;
         const subtotal = items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price) - Number(item.discount || 0), 0);
-        const { total } = paymentTotals(subtotal, payment?.surcharge_percent || 0);
+        const { total } = paymentTotals(subtotal, payment?.surcharge_percent || 0, payment?.pix_discount_percent || 0);
         const [logoResult, pixResult, appResult, checkoutResult] = await Promise.allSettled([
           loadPdfImage(`${window.location.origin}/brand/cr-reparador.jpg`),
           QRCode.toDataURL(createPixPayload(total, number), { width: 220, margin: 1 }),
@@ -86,11 +72,11 @@ export function PrintDocument({ type, number, client, vehicle, status, items, no
       return;
     }
     const subtotal = items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price) - Number(item.discount || 0), 0);
-    const { total, surcharge } = paymentTotals(subtotal, payment?.surcharge_percent || 0);
+    const { total, surcharge, discount } = paymentTotals(subtotal, payment?.surcharge_percent || 0, payment?.pix_discount_percent || 0);
     const configured = payment && (payment.payment_method !== "not_defined" || payment.payment_terms || Number(payment.surcharge_percent) > 0);
-    const effectivePixDiscount = configured ? 0 : pixDiscountPercentage;
-    const pixDiscount = type === "Orçamento" ? total * (effectivePixDiscount / 100) : 0;
-    const pixTotal = total - pixDiscount;
+    const effectivePixDiscount = Number(payment?.pix_discount_percent || 0);
+    const pixDiscount = discount;
+    const pixTotal = total;
     const rows = items.map((item) => `<tr><td>${escapeHtml(item.description)}</td><td>${item.quantity}</td><td>${currency.format(Number(item.unit_price))}</td><td>${currency.format(Number(item.quantity) * Number(item.unit_price) - Number(item.discount || 0))}</td></tr>`).join("") || '<tr><td colspan="4">Nenhum item lançado.</td></tr>';
     const logo = `${window.location.origin}/brand/cr-reparador.jpg`;
     const win = window.open("", "_blank");
@@ -111,7 +97,7 @@ export function PrintDocument({ type, number, client, vehicle, status, items, no
       }
       if (!configured || ["pix", "combined"].includes(payment.payment_method)) try {
         const pixQrCode = await QRCode.toDataURL(createPixPayload(pixTotal, number), { width: 220, margin: 1, color: { dark: "#151515", light: "#ffffff" } });
-        pixPayment = `<section class="pix-payment"><img src="${pixQrCode}" alt="QR Code Pix"/><div><div class="label">PAGAMENTO VIA PIX</div><strong>${effectivePixDiscount > 0 ? `${effectivePixDiscount}% de desconto no Pix` : "Valor combinado no Pix"}</strong><p>Orçamento: <s>${currency.format(total)}</s> · Desconto: ${currency.format(pixDiscount)}</p><p>Valor no QR Code: <b>${currency.format(pixTotal)}</b></p><small>Escaneie para pagar o valor já preenchido. Chave Pix: 13991320205.</small></div></section>`;
+        pixPayment = `<section class="pix-payment"><img src="${pixQrCode}" alt="QR Code Pix"/><div><div class="label">PAGAMENTO VIA PIX</div><strong>${effectivePixDiscount > 0 ? `${effectivePixDiscount}% de desconto no Pix` : "Valor combinado no Pix"}</strong><p>Antes do desconto: <s>${currency.format(subtotal + surcharge)}</s> · Desconto: ${currency.format(pixDiscount)}</p><p>Valor no QR Code: <b>${currency.format(pixTotal)}</b></p><small>Escaneie para pagar o valor já preenchido. Chave Pix: 13991320205.</small></div></section>`;
       } catch {
         pixPayment = `<section class="pix-payment"><div class="pix-icon">PIX</div><div><div class="label">PAGAMENTO VIA PIX</div><strong>${effectivePixDiscount > 0 ? `${effectivePixDiscount}% de desconto no Pix` : "Valor combinado no Pix"}</strong><p>Valor no Pix: <b>${currency.format(pixTotal)}</b></p><small>Chave Pix: 13991320205.</small></div></section>`;
       }
@@ -122,7 +108,7 @@ export function PrintDocument({ type, number, client, vehicle, status, items, no
       } catch { /* O PDF continua disponível mesmo se a criação do checkout falhar. */ }
     }
 
-    const termsSection = payment ? `<section class="box"><div class="label">CONDIÇÕES DE PAGAMENTO</div><p><b>${escapeHtml(paymentMethodLabel(payment.payment_method))}</b></p><p style="white-space:pre-wrap">${escapeHtml(payment.payment_terms || "A combinar")}</p><p>Serviços e peças: ${currency.format(subtotal)} · Acréscimo (${Number(payment.surcharge_percent)}%): ${currency.format(surcharge)}</p>${payment.surcharge_reason ? `<p>Motivo do acréscimo: ${escapeHtml(payment.surcharge_reason)}</p>` : ""}<p><b>Total combinado: ${currency.format(total)}</b></p><p>${payment.acceptance ? `${payment.acceptance.source === "client_portal" ? "Aceito pelo cliente no portal" : "Aceite informado pela oficina"} em ${new Date(payment.acceptance.at).toLocaleString("pt-BR")} · ${currency.format(payment.acceptance.total)}` : "Aceite pendente. O cliente deve conferir e aceitar as condições antes do serviço."}</p></section>` : "";
+    const termsSection = payment ? `<section class="box"><div class="label">CONDIÇÕES DE PAGAMENTO</div><p><b>${escapeHtml(paymentMethodLabel(payment.payment_method))}</b></p><p style="white-space:pre-wrap">${escapeHtml(payment.payment_terms || "A combinar")}</p><p>Serviços e peças: ${currency.format(subtotal)} · Acréscimo (${Number(payment.surcharge_percent)}%): ${currency.format(surcharge)}</p>${discount > 0 ? `<p>Desconto Pix (${effectivePixDiscount}%): − ${currency.format(discount)}</p>` : ""}${payment.deferred_without_deposit ? "<p>Retirada sem entrada, com pagamento depois da entrega.</p>" : ""}${payment.surcharge_reason ? `<p>Motivo do acréscimo: ${escapeHtml(payment.surcharge_reason)}</p>` : ""}<p><b>Total combinado: ${currency.format(total)}</b></p><p>${payment.acceptance ? `${payment.acceptance.source === "client_portal" ? "Aceito pelo cliente no portal" : "Aceite informado pela oficina"} em ${new Date(payment.acceptance.at).toLocaleString("pt-BR")} · ${currency.format(payment.acceptance.total)}` : "Aceite pendente. O cliente deve conferir e aceitar as condições antes do serviço."}</p></section>` : "";
 
 
     win.opener = null;
@@ -138,23 +124,3 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char] || char);
 }
 
-function createPixPayload(amount: number, budgetNumber: string) {
-  const field = (id: string, value: string) => `${id}${value.length.toString().padStart(2, "0")}${value}`;
-  const merchantAccount = field("00", "br.gov.bcb.pix") + field("01", pixKey);
-  const reference = `ORC${budgetNumber.replace(/[^A-Za-z0-9]/g, "").slice(-16) || "CRCONNECT"}`;
-  const payload = [
-    field("00", "01"), field("26", merchantAccount), field("52", "0000"), field("53", "986"),
-    field("54", Math.max(0, amount).toFixed(2)), field("58", "BR"), field("59", "CR REPARADOR"),
-    field("60", "SAO VICENTE"), field("62", field("05", reference)), "6304",
-  ].join("");
-  return `${payload}${crc16(payload)}`;
-}
-
-function crc16(value: string) {
-  let crc = 0xffff;
-  for (let index = 0; index < value.length; index += 1) {
-    crc ^= value.charCodeAt(index) << 8;
-    for (let bit = 0; bit < 8; bit += 1) crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff;
-  }
-  return crc.toString(16).toUpperCase().padStart(4, "0");
-}
