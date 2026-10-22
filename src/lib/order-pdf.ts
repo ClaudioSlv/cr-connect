@@ -97,9 +97,11 @@ export function createOrderPdf(order: OrderPdf, assets: OrderPdfAssets = {}) {
   }
   const subtotal = order.items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price) - Number(item.discount || 0), 0);
   const payment = order.payment;
-  const { surcharge, total } = paymentTotals(subtotal, payment?.surcharge_percent || 0);
+  const { surcharge, total, discount } = paymentTotals(subtotal, payment?.surcharge_percent || 0, payment?.pix_discount_percent || 0);
   ensure(14); font(13, true, gold); pdf.text(`Total: ${money(total)}`, 192, y + 7, {align:"right"}); y += 14;
   const terms: Paragraph[] = [{text:paymentMethodLabel(payment?.payment_method || "not_defined"),bold:true},{text:payment?.payment_terms || "Condições a combinar com o cliente."},{text:`Serviços e peças: ${money(subtotal)} · Acréscimo (${payment?.surcharge_percent || 0}%): ${money(surcharge)}`}];
+  if (discount > 0) terms.push({text:`Desconto Pix (${payment?.pix_discount_percent}%): - ${money(discount)}`});
+  if (payment?.deferred_without_deposit) terms.push({text:"Retirada sem entrada, com pagamento depois da entrega."});
   if (payment?.surcharge_reason) terms.push({text:`Motivo do acréscimo: ${payment.surcharge_reason}`});
   terms.push({text:`Total combinado: ${money(total)}`,bold:true});
   terms.push({text:payment?.acceptance ? `${payment.acceptance.source === "client_portal" ? "Aceito pelo cliente no portal" : "Aceite informado pela oficina"} em ${new Date(payment.acceptance.at).toLocaleString("pt-BR", {timeZone:"America/Sao_Paulo"})} · ${money(payment.acceptance.total)}` : "Aceite pendente. O cliente deve conferir e aceitar as condições antes do serviço.",muted:true});
@@ -119,7 +121,7 @@ export function createOrderPdf(order: OrderPdf, assets: OrderPdfAssets = {}) {
     if (link) pdf.link(left, y, width, height, {url:link});
     y += height + 4;
   }
-  if (!payment || ["not_defined", "pix", "combined"].includes(payment.payment_method)) promo("PAGAMENTO VIA PIX", "Valor combinado no Pix", `Valor no QR Code: ${money(total)}. Chave Pix: 13991320205.`, assets.pixQr, "#28a886");
+  if (!payment || ["not_defined", "pix", "combined"].includes(payment.payment_method)) promo("PAGAMENTO VIA PIX", discount > 0 ? `${payment?.pix_discount_percent}% de desconto no Pix` : "Valor combinado no Pix", `${discount > 0 ? `Antes do desconto: ${money(subtotal)}. Desconto: ${money(discount)}. ` : ""}Valor no QR Code: ${money(total)}. Chave Pix: 13991320205.`, assets.pixQr, "#28a886");
   if (payment && ["credit_card", "debit_card", "combined"].includes(payment.payment_method)) promo("CR CONNECT + INFINITEPAY", assets.checkoutUrl ? "Abrir pagamento seguro com cartão" : "Pagamento com cartão", `Valor no cartão: ${money(total)}.${assets.checkoutUrl ? " Toque neste quadro para abrir o pagamento." : " Solicite o link de pagamento à oficina."}`, undefined, "#484848", assets.checkoutUrl);
   promo("CR CONNECT · PORTAL DO CLIENTE", "CONFIRA SUA O.S. NO APP", "Acesse com seu cadastro para acompanhar o atendimento e aceitar as condições combinadas.", assets.appQr, "#d5ac45", assets.portalUrl);
   return pdf;
