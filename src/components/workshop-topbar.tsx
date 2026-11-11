@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { DashboardIcon } from "@/components/dashboard-icon";
 import { createClient } from "@/lib/supabase/client";
 
 type WorkshopNotification = {
@@ -20,27 +21,24 @@ function destination(notification: WorkshopNotification) {
 }
 
 export function WorkshopTopbar() {
-  const db = createClient();
+  const [db] = useState(() => createClient());
   const [items, setItems] = useState<WorkshopNotification[]>([]);
   const [open, setOpen] = useState(false);
 
-  async function load() {
-    const { data: { user } } = await db.auth.getUser();
-    if (!user) return;
-    const { data } = await db
-      .from("notifications")
-      .select("id,title,body,read_at,created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(30);
-    setItems((data || []) as WorkshopNotification[]);
-  }
-
   useEffect(() => {
+    let disposed = false;
+    async function load() {
+      const { data: { user } } = await db.auth.getUser();
+      if (!user || disposed) return;
+      const { data } = await db.from("notifications")
+        .select("id,title,body,read_at,created_at")
+        .eq("user_id", user.id).order("created_at", { ascending: false }).limit(30);
+      if (!disposed) setItems((data || []) as WorkshopNotification[]);
+    }
     void load();
     const timer = window.setInterval(() => void load(), 10000);
-    return () => window.clearInterval(timer);
-  }, []);
+    return () => { disposed = true; window.clearInterval(timer); };
+  }, [db]);
 
   async function openBell() {
     setOpen((current) => !current);
@@ -60,13 +58,15 @@ export function WorkshopTopbar() {
         type="button"
         onClick={() => void openBell()}
         aria-label="Abrir central de notificações"
-        className="relative grid h-11 w-11 place-items-center rounded-full border border-[#FFC107]/70 bg-[#171717] text-xl shadow-lg"
+        aria-expanded={open}
+        aria-controls="workshop-notifications"
+        className="relative grid h-11 w-11 place-items-center rounded-xl border border-zinc-800 bg-[#171717] text-zinc-300 transition hover:border-zinc-600 hover:text-[#FFC107]"
       >
-        🔔
+        <DashboardIcon name="bell" className="h-5 w-5" />
         {unread > 0 && <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-[#FFC107] px-1 text-[11px] font-black text-black">{unread > 9 ? "9+" : unread}</span>}
       </button>
 
-      {open && <section className="absolute right-0 top-14 w-[min(24rem,calc(100vw-3rem))] rounded-2xl border border-zinc-700 bg-[#151515] p-4 text-left shadow-2xl">
+      {open && <section id="workshop-notifications" aria-label="Notificações da oficina" className="absolute right-0 top-14 w-[min(24rem,calc(100vw-3rem))] rounded-2xl border border-zinc-700 bg-[#151515] p-4 text-left shadow-2xl">
         <div className="flex items-center justify-between gap-3"><div><b>Notificações</b><p className="text-xs text-zinc-400">Pedidos e mensagens da oficina.</p></div><Link href="/app/notificacoes" className="text-sm font-bold text-[#FFC107]">Ver todas</Link></div>
         <div className="mt-3 max-h-80 space-y-2 overflow-y-auto">
           {items.length === 0 && <p className="rounded-lg bg-black/30 p-3 text-sm text-zinc-400">Nenhuma notificação ainda.</p>}

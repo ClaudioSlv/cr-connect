@@ -12,3 +12,26 @@
 }
 
 @layer base { a { color: inherit; text-decoration: none; } }
+
+/* Shared controls keep the original black and yellow identity. */
+body { -webkit-font-smoothing: antialiased; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+button, summary, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button:not(:disabled), summary { cursor: pointer; }
+button:disabled { cursor: wait; }
+.field { border-color: #353535; border-radius: .75rem; background: #101010; min-height: 2.875rem; transition: border-color .15s, box-shadow .15s; }
+.field::placeholder { color: #71717a; }
+.field:hover:not(:focus) { border-color: #525252; }
+.field:disabled { opacity: .55; cursor: not-allowed; }
+.app-workspace h1, .app-workspace h2 { letter-spacing: -.025em; }
+.app-workspace form { box-shadow: 0 8px 30px rgb(0 0 0 / .12); }
+.app-workspace table { border-collapse: collapse; }
+.app-workspace th { font-size: .7rem; font-weight: 600; letter-spacing: .04em; }
+.app-workspace tbody tr { transition: background-color .15s; }
+.app-workspace tbody tr:hover { background: rgb(255 255 255 / .025); }
+.app-workspace button { touch-action: manipulation; }
+.app-menu-dialog:open { overflow-y: auto; overscroll-behavior: contain; }
+html:has(.app-menu-dialog[open]) { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
