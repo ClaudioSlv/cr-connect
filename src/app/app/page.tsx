@@ -59,7 +59,7 @@ export default async function AppHome() {
   const hasError = [clients,vehicles,orders,products,approvals,ready,recent].some(result=>result.error);
 
   return <AppShell workshop={workshop.name} heading="Painel da oficina">
-    <div className="mx-auto max-w-6xl pb-24 md:pb-4">
+    <div className="mx-auto max-w-6xl">
       <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div><p className="text-xs font-semibold uppercase tracking-[.14em] text-zinc-500">Sua operação, em um só lugar</p><h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Visão geral</h2></div>
         <p className="text-xs capitalize text-zinc-400">{date}</p>
@@ -105,8 +105,6 @@ export default async function AppHome() {
       <Link href="/app/relatorios" className="mt-5 inline-flex py-2 text-sm font-semibold text-[#FFC107]">Abrir relatórios da oficina →</Link>
     </div>
 
-    <nav aria-label="Navegação principal" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-zinc-800 bg-[#111]/95 px-2 pt-2 pb-[max(.5rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden">
-      {([{href:"/app",label:"Início",icon:"home"},{href:"/app/ordens",label:"Ordens",icon:"order"},{href:"/app/veiculos",label:"Veículos",icon:"vehicle"},{href:"/app/clientes",label:"Clientes",icon:"client"},{href:"/app/chat",label:"Chat",icon:"chat"}] as const).map(item=><Link key={item.href} href={item.href} aria-current={item.href==="/app"?"page":undefined} className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg text-[11px] font-medium ${item.href==="/app"?"bg-[#FFC107]/10 text-[#FFC107]":"text-zinc-400"}`}><DashboardIcon name={item.icon} className="h-5 w-5"/>{item.label}</Link>)}
-    </nav>
+
   </AppShell>;
 }

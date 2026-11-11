@@ -1,12 +1,20 @@
-import Image from "next/image";
-import Link from "next/link";
 import { ReturnAfterSave } from "@/components/return-after-save";
 import { WorkshopNotificationListener } from "@/components/workshop-notification-listener";
-import { SignOutButton } from "@/components/sign-out-button";
 import { WorkshopTopbar } from "@/components/workshop-topbar";
+import { AppNavigation } from "@/components/app-navigation";
 
-const items = [["Visão geral", "/app"], ["Clientes", "/app/clientes"], ["Veículos", "/app/veiculos"], ["Ordens de serviço", "/app/ordens"], ["Orçamentos", "/app/orcamentos"], ["Termos", "/app/termos"], ["Estoque", "/app/estoque"], ["Financeiro", "/app/financeiro"], ["Diagnóstico", "/app/diagnostico"], ["Assistente IA", "/app/assistente"], ["Biblioteca técnica", "/app/biblioteca"], ["Chat", "/app/chat"], ["Notificações", "/app/notificacoes"], ["CR SOS", "/app/cr-sos"], ["Equipe", "/app/equipe"], ["Assinatura", "/app/assinatura"], ["Relatórios", "/app/relatorios"], ["Configurações", "/app/configuracoes"]];
-
-function Navigation() { return <nav className="grid grid-cols-2 gap-1 md:grid-cols-1">{items.map(([label, href]) => <Link key={href} href={href} className="rounded-lg px-3 py-2 text-base text-zinc-300 transition hover:bg-[#261e0b] hover:text-[#FFC107] md:text-sm">{label}</Link>)}<div className="col-span-2 md:col-span-1"><SignOutButton /></div></nav>; }
-
-export function AppShell({ workshop, heading, children }: { workshop: string; heading?: string; children: React.ReactNode }) { return <div className="min-h-screen text-zinc-100 md:grid md:grid-cols-[260px_1fr]"><ReturnAfterSave /><WorkshopNotificationListener /><aside className="border-b border-[#4a3818] bg-black/90 md:min-h-screen md:border-b-0 md:border-r"><details className="group md:hidden"><summary className="flex cursor-pointer list-none items-center gap-3 p-4"><Image src="/brand/cr-reparador.jpg" width={44} height={44} alt="CR Reparador Automotivo" className="rounded-lg border border-[#FFC107]"/><div className="min-w-0 flex-1"><p className="text-sm font-bold tracking-[.16em] text-[#FFC107] md:text-xs">CR CONNECT</p><p className="break-words text-sm leading-5 text-zinc-400">{workshop}</p></div><span className="text-base text-zinc-400 group-open:hidden">Menu</span><span className="hidden text-base text-zinc-400 group-open:inline">Fechar</span></summary><div className="border-t border-zinc-800 px-3 pb-4"><Navigation /></div></details><div className="hidden p-5 md:block"><Image src="/brand/cr-reparador.jpg" width={146} height={146} alt="CR Reparador Automotivo" className="mx-auto rounded-2xl border border-[#FFC107]"/><p className="mt-4 text-center text-xs font-bold tracking-[.2em] text-[#FFC107]">CR CONNECT</p><p className="mt-2 truncate text-center text-sm text-zinc-400">{workshop}</p><div className="mt-7"><Navigation /></div></div></aside><main className="min-w-0 p-4 sm:p-6 md:p-8"><div className="mx-auto mb-5 flex max-w-6xl items-center justify-between gap-4">{heading ? <h1 className="text-sm font-medium text-zinc-400">{heading}</h1> : <span/>}<WorkshopTopbar /></div>{children}</main></div>; }
+export function AppShell({ workshop, heading, children }: { workshop: string; heading?: string; children: React.ReactNode }) {
+  return <div className="app-workspace min-h-screen bg-[#0e0e0e] text-zinc-100 md:pl-64">
+    <a href="#workspace-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-[#FFC107] focus:px-4 focus:py-3 focus:text-black">Pular para o conteúdo</a>
+    <ReturnAfterSave />
+    <WorkshopNotificationListener />
+    <AppNavigation workshop={workshop} />
+    <div className="border-b border-white/[.06] bg-[#101010] px-4 sm:px-6 md:px-9">
+      <div className="mx-auto flex min-h-[68px] max-w-6xl items-center justify-between gap-4">
+        <p className="min-w-0 truncate text-xs text-zinc-500"><span className="hidden sm:inline">Minha oficina <span className="mx-3 text-zinc-700">/</span></span><span className="font-medium text-zinc-300">{heading || workshop}</span></p>
+        <WorkshopTopbar />
+      </div>
+    </div>
+    <main id="workspace-content" tabIndex={-1} className="mx-auto min-w-0 max-w-[1248px] px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 md:px-9 md:py-8">{children}</main>
+  </div>;
+}
