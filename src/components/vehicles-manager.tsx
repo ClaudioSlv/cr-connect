@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { crRequest } from "@/lib/d1/browser";
 import { createClient } from "@/lib/supabase/client";
 
 type Customer = { id: string; full_name: string };
@@ -19,7 +20,7 @@ function dateLabel(value: string | null) {
   return value ? new Date(`${value}T12:00:00`).toLocaleDateString("pt-BR") : "não programado";
 }
 
-export function VehiclesManager({ workshopId }: { workshopId: string }) {
+export function VehiclesManager({ workshopId, backend = "supabase" }: { workshopId: string; backend?: "supabase" | "d1" }) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [items, setItems] = useState<Vehicle[]>([]);
   const [form, setForm] = useState(empty);
@@ -30,12 +31,12 @@ export function VehiclesManager({ workshopId }: { workshopId: string }) {
   const listButtonRef = useRef<HTMLButtonElement>(null);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
-  const db = createClient();
+  const db = backend === "d1" ? null : createClient();
 
   async function load() {
     const [customersResult, vehiclesResult] = await Promise.all([
-      db.from("clients").select("id,full_name").eq("workshop_id", workshopId).order("full_name"),
-      db.from("vehicles").select("id,client_id,plate,brand,model,version,year_model,fuel,engine,mileage,notes,timing_belt_changed_at,timing_belt_changed_mileage,timing_belt_reminder_at,timing_belt_reminder_mileage,clients(id,full_name)").eq("workshop_id", workshopId).order("created_at", { ascending: false }),
+      backend === "d1" ? crRequest<Customer[]>(`clients?workshop_id=${encodeURIComponent(workshopId)}`) : db!.from("clients").select("id,full_name").eq("workshop_id", workshopId).order("full_name"),
+      backend === "d1" ? crRequest<Vehicle[]>(`vehicles?workshop_id=${encodeURIComponent(workshopId)}`) : db!.from("vehicles").select("id,client_id,plate,brand,model,version,year_model,fuel,engine,mileage,notes,timing_belt_changed_at,timing_belt_changed_mileage,timing_belt_reminder_at,timing_belt_reminder_mileage,clients(id,full_name)").eq("workshop_id", workshopId).order("created_at", { ascending: false }),
     ]);
     if (customersResult.error || vehiclesResult.error) setMessage(customersResult.error?.message || vehiclesResult.error?.message || "");
     else { setCustomers((customersResult.data || []) as Customer[]); setItems((vehiclesResult.data || []) as unknown as Vehicle[]); }
@@ -48,7 +49,7 @@ export function VehiclesManager({ workshopId }: { workshopId: string }) {
   async function submit(event: FormEvent) {
     event.preventDefault(); setSaving(true); setMessage("");
     const payload = { workshop_id: workshopId, client_id: form.client_id, plate: form.plate.toUpperCase().replace(/[^A-Z0-9]/g, "") || null, brand: form.brand.trim(), model: form.model.trim(), version: form.version.trim() || null, year_model: form.year_model ? Number(form.year_model) : null, fuel: form.fuel.trim() || null, engine: form.engine.trim() || null, mileage: form.mileage ? Number(form.mileage) : null, notes: form.notes.trim() || null, timing_belt_changed_at: form.timing_belt_changed_at || null, timing_belt_changed_mileage: form.timing_belt_changed_mileage ? Number(form.timing_belt_changed_mileage) : null, timing_belt_reminder_at: form.timing_belt_reminder_at || null, timing_belt_reminder_mileage: form.timing_belt_reminder_mileage ? Number(form.timing_belt_reminder_mileage) : null };
-    const result = editing ? await db.from("vehicles").update(payload).eq("id", editing).eq("workshop_id", workshopId) : await db.from("vehicles").insert(payload);
+    const result = backend === "d1" ? await crRequest(`vehicles${editing ? `/${editing}` : ""}?workshop_id=${encodeURIComponent(workshopId)}`, editing ? "PATCH" : "POST", payload) : editing ? await db!.from("vehicles").update(payload).eq("id", editing).eq("workshop_id", workshopId) : await db!.from("vehicles").insert(payload);
     if (result.error) setMessage(result.error.code === "23505" ? "Já existe um veículo com esta placa." : result.error.message);
     else { setForm(empty); setEditing(null); setMessage("Veículo e lembrete preventivo salvos com sucesso."); await load(); setListOpen(false); setQuery(""); listButtonRef.current?.focus({preventScroll:true}); }
     setSaving(false);
@@ -64,7 +65,7 @@ export function VehiclesManager({ workshopId }: { workshopId: string }) {
   }
   async function remove(id: string) {
     if (!confirm("Excluir este veículo? Ordens de serviço vinculadas impedem a exclusão.")) return;
-    const { error } = await db.from("vehicles").delete().eq("id", id).eq("workshop_id", workshopId);
+    const { error } = backend === "d1" ? await crRequest(`vehicles/${id}?workshop_id=${encodeURIComponent(workshopId)}`, "DELETE") : await db!.from("vehicles").delete().eq("id", id).eq("workshop_id", workshopId);
     setMessage(error ? error.message : "Veículo excluído.");
     if (!error) { if (editing === id) { setEditing(null); setForm(empty); } await load(); }
   }

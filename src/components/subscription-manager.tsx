@@ -47,7 +47,7 @@ export function SubscriptionManager({ workshopId, isAdmin }: { workshopId: strin
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan }),
       });
-      const result = await response.json().catch(() => ({}));
+      const result = await response.json().catch(() => ({})) as {error?:string;checkoutUrl?:string};
       if (!response.ok) throw new Error(result.error || "Não foi possível gerar o checkout.");
       if (typeof result.checkoutUrl !== "string") throw new Error("A InfinitePay não retornou o link de pagamento.");
       setPlanNotice("Abrindo o pagamento seguro da InfinitePay…");

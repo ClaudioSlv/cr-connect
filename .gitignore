@@ -5,3 +5,10 @@ node_modules
 !.env.example
 *.tsbuildinfo
 supabase/.temp
+/dist/
+.vinext/
+.cloudflare/
+
+.dev.vars
+.dev.vars.*
+!.dev.vars.example

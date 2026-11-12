@@ -15,9 +15,9 @@ export default function Home() {
         <section className="flex flex-1 flex-col justify-center pb-8 pt-14">
           <p className="text-sm font-bold tracking-[.22em] text-[#FFC107]">SUA OFICINA, EM UM SÓ LUGAR</p>
           <h1 className="mt-4 text-4xl font-black leading-tight text-white sm:text-5xl">Conecte sua oficina. Cuide de cada cliente.</h1>
-          <p className="mt-5 max-w-md text-lg leading-8 text-zinc-200">Clientes, veículos, ordens de serviço e ajuda CR SOS com uma experiência simples e profissional.</p>
+          <p className="mt-5 max-w-md text-lg leading-8 text-zinc-200">{process.env.CR_BACKEND === "d1" ? "Organize os cadastros de clientes e veículos da sua oficina. Outros recursos estão em atualização." : "Clientes, veículos, ordens de serviço e ajuda CR SOS com uma experiência simples e profissional."}</p>
           <div className="mt-10 grid gap-4"><Link href="/login" className="rounded-2xl bg-[#FFC107] px-5 py-4 text-center text-lg font-black text-black shadow-lg shadow-black/40 transition hover:bg-[#ffd23b]">Entrar</Link><Link href="/login?novo=1" className="rounded-2xl border-2 border-[#FFC107] bg-black/50 px-5 py-4 text-center text-lg font-black text-[#FFC107] backdrop-blur-sm transition hover:bg-[#FFC107]/10">Criar conta</Link></div>
-          <Link href="/sos" className="mt-6 text-center text-sm font-semibold text-zinc-300 underline decoration-[#FFC107] underline-offset-4">Precisa de ajuda na estrada? Acesse o CR SOS</Link>
+          {process.env.CR_BACKEND !== "d1" && <Link href="/sos" className="mt-6 text-center text-sm font-semibold text-zinc-300 underline decoration-[#FFC107] underline-offset-4">Precisa de ajuda na estrada? Acesse o CR SOS</Link>}
         </section>
         <p className="text-center text-xs text-zinc-400">CR Connect · Tecnologia para oficinas e proprietários de veículos</p>
       </div>
