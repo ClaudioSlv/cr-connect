@@ -109,7 +109,7 @@ export function BolaoReminderPrompt() {
             ? await registration.pushManager.getSubscription() : null;
           if (subscription?.endpoint === saved.endpoint && Notification.permission === "granted") {
             const response = await post({ action: "status", endpoint: saved.endpoint, token: saved.token });
-            const result = response.ok ? await response.json() : null;
+            const result = response.ok ? await response.json() as {active?:boolean} : null;
             if (cancelled) return;
             if (result?.active) {
               setEnabled(true);
@@ -168,7 +168,7 @@ export function BolaoReminderPrompt() {
       const nextCredential: Credential = { endpoint: subscription.endpoint, token: saved?.token || randomToken() };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(nextCredential)); setCredential(nextCredential);
       const response = await post({ subscription: subscription.toJSON(), token: nextCredential.token, consentVersion: BOLAO_CONSENT_VERSION });
-      const result = await response.json();
+      const result = await response.json() as {error?:string;subscriptionId?:string};
       if (!response.ok) throw new Error(result.error || "Não foi possível ativar os lembretes agora.");
       nextCredential.subscriptionId = result.subscriptionId;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(nextCredential)); setCredential(nextCredential);

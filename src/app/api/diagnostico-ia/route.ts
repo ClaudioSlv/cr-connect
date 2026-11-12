@@ -4,7 +4,7 @@ import { findDtcReference, formatDtcReference } from "@/lib/dtc-catalog";
 export async function POST(request: Request) {
   const db = await createClient(); const { data: { user } } = await db.auth.getUser();
   if (!user) return Response.json({ error: "Não autorizado." }, { status: 401 });
-  const { symptom, vehicle, mode } = await request.json();
+  const { symptom, vehicle, mode } = await request.json() as { symptom?: unknown; vehicle?: string; mode?: string };
   if (typeof symptom !== "string" || symptom.trim().length < (mode === "dtc" ? 4 : 8)) return Response.json({ error: mode === "dtc" ? "Informe um código DTC válido." : "Descreva o sintoma com mais detalhes." }, { status: 400 });
   const dtcCode = symptom.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   const localReference = mode === "dtc" ? findDtcReference(dtcCode) : null;
@@ -19,11 +19,11 @@ export async function POST(request: Request) {
     if (mode === "dtc") body.tools = [{ google_search: {} }];
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY }, body: JSON.stringify(body) });
     if (!response.ok) { console.error("Diagnostic provider error", model, response.status, await response.text()); if (response.status === 429 || response.status === 403) break; continue; }
-    const data = await response.json();
+    const data = await response.json() as { candidates?: { content?: { parts?: {text?:string}[] }; groundingMetadata?: {groundingChunks?: {web?:{uri?:string;title?:string}}[]} }[] };
     const candidate = data.candidates?.[0];
     const answer = candidate?.content?.parts?.map((part: { text?: string }) => part.text || "").join("\n");
     const chunks = candidate?.groundingMetadata?.groundingChunks || [];
-    const sources = chunks.map((chunk: { web?: { uri?: string; title?: string } }) => chunk.web).filter((source: { uri?: string; title?: string } | undefined) => source?.uri).map((source: { uri: string; title?: string }) => ({ url: source.uri, title: source.title || "Referência técnica" })).filter((source: { url: string }, index: number, all: { url: string }[]) => all.findIndex((item) => item.url === source.url) === index).slice(0, 5);
+    const sources = chunks.map((chunk: { web?: { uri?: string; title?: string } }) => chunk.web).filter((source: { uri?: string; title?: string } | undefined)  : source is {uri:string;title?:string} => Boolean(source?.uri)).map((source: { uri: string; title?: string }) => ({ url: source.uri, title: source.title || "Referência técnica" })).filter((source: { url: string }, index: number, all: { url: string }[]) => all.findIndex((item) => item.url === source.url) === index).slice(0, 5);
     if (answer) return Response.json({ answer, sources });
   }
   if (localReference) return Response.json({ answer: formatDtcReference(localReference, vehicle), sources: [], fallback: true });

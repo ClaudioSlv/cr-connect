@@ -19,7 +19,7 @@ export function DtcLookup() {
     setCode(normalizedCode); setLoading(true); setError(""); setAnswer(""); setSources([]);
     try {
       const response = await fetch("/api/diagnostico-ia", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vehicle: vehicle.trim(), symptom: normalizedCode, mode: "dtc" }) });
-      const data = await response.json().catch(() => ({}));
+      const data = await response.json().catch(() => ({})) as {error?:string;answer?:string;sources?:{url:string;title:string}[]};
       if (!response.ok) setError(data.error || "Não foi possível consultar esse código agora.");
       else { setAnswer(data.answer || "Nenhuma informação encontrada para esse código."); setSources(Array.isArray(data.sources) ? data.sources : []); }
     } catch { setError("Não foi possível conectar ao serviço de consulta. Verifique sua internet e tente novamente."); }

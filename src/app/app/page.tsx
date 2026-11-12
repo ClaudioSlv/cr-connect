@@ -1,3 +1,4 @@
+import { D1Home } from "@/components/d1-home";
 import Image from "next/image";
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
@@ -17,6 +18,7 @@ const quickActions = [
 ] satisfies { title: string; href: string; icon: DashboardIconName }[];
 
 export default async function AppHome() {
+  if (process.env.CR_BACKEND === "d1") return <D1Home />;
   const db = await createClient();
   const { data: { user } } = await db.auth.getUser();
   if (!user) redirect("/login");

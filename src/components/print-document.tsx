@@ -35,7 +35,7 @@ export function PrintDocument({ type, number, client, vehicle, status, items, no
           payment && ["credit_card", "debit_card", "combined"].includes(payment.payment_method) && total > 0
             ? fetch("/api/checkout-orcamento", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({amount:total,budgetNumber:`OS-${number}`,client}),signal:AbortSignal.timeout(8000)}).then(async response => {
               if (!response.ok) return undefined;
-              const result = await response.json();
+              const result = await response.json() as {error?:string;publicUrl?:string};
               return typeof result.publicUrl === "string" && result.publicUrl.startsWith(`${window.location.origin}/p/`) ? result.publicUrl as string : undefined;
             }) : Promise.resolve(undefined),
         ]);
