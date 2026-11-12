@@ -5,7 +5,7 @@ export async function proxy(request: NextRequest) {
   if (process.env.CR_BACKEND === "d1") {
     const path = request.nextUrl.pathname;
     if (path.startsWith("/api/") && !path.startsWith("/api/cr/")) return NextResponse.json({error:{message:"Este módulo ainda está em adaptação."}},{status:503,headers:{"Cache-Control":"no-store"}});
-    if (path.startsWith("/app") && !["/app", "/app/clientes", "/app/veiculos"].includes(path)) return NextResponse.redirect(new URL("/app",request.url));
+    if (path.startsWith("/app") && !["/app", "/app/clientes", "/app/veiculos", "/app/orcamentos", "/app/ordens", "/app/precificacao"].includes(path)) return NextResponse.redirect(new URL("/app",request.url));
     if (path.startsWith("/auth/") && path !== "/auth/d1") return NextResponse.redirect(new URL("/login",request.url));
     const response = NextResponse.next();
     response.headers.set("Cache-Control","private, no-store");

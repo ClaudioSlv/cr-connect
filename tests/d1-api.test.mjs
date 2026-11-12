@@ -16,7 +16,7 @@ const api=(path,options,mail=send)=>handleApi(request(path,options),{DB:db,APP_O
 before(async()=>{
   mf=new Miniflare({workers:[{config:{name:'test',compatibilityDate:'2026-11-12',manifest:{mainModule:'worker.js',modules:{'worker.js':{type:'esm',contents:'export default {fetch(){return new Response("ok")}}'}}},env:{DB:{type:'d1',id:'test-db',name:'test-db'}}}}]});
   db=await mf.getD1Database('DB');
-  for(const name of ['0001_identity','0002_core']) { const sql=await readFile(new URL(`../d1/migrations/${name}.sql`,import.meta.url),'utf8'); await db.batch(sql.replace(/^--.*$/gm,'').split(';').map(s=>s.trim()).filter(Boolean).map(s=>db.prepare(s))); }
+  for(const name of ['0001_identity','0002_core','0003_password_auth']) { const sql=await readFile(new URL(`../d1/migrations/${name}.sql`,import.meta.url),'utf8'); await db.batch(sql.replace(/^--.*$/gm,'').split(';').map(s=>s.trim()).filter(Boolean).map(s=>db.prepare(s))); }
   await db.exec(`INSERT INTO app_users(id,email) VALUES ('a','a@example.com'),('b','b@example.com'),('mechanic','m@example.com');
     INSERT INTO workshops(id,name) VALUES ('wa','Oficina A'),('wb','Oficina B');
     INSERT INTO workshop_users(workshop_id,user_id,role) VALUES ('wa','a','admin'),('wb','b','admin'),('wa','mechanic','mechanic');
@@ -132,4 +132,31 @@ test('expired sessions cannot authorize data access',async()=>{
   await db.prepare('INSERT INTO auth_sessions(token_hash,user_id,expires_at) VALUES (?,?,?)').bind(await hash(raw),'a',1).run();
   assert.equal(await sessionUser(db,raw),null);
   assert.equal((await api('clients?workshop_id=wa',{user:null,headers:{cookie:`__Host-cr_session=${raw}`}})).status,401);
+});
+
+const passwordEnv=()=>({DB:db,APP_ORIGIN:origin,AUTH_METHOD:'password',PASSWORD_PEPPER:'local-test-pepper-that-is-long-enough-1234'});
+const pwApi=(op,body,headers={})=>handleApi(request(`auth/password/${op}`,{method:'POST',user:null,body,headers}),passwordEnv(),send);
+test('password registration, login and recovery never store plaintext secrets',async()=>{
+  const address='password@example.com',password='my unique password 123';
+  const registered=await pwApi('register',{email:address,password});assert.equal(registered.status,201);
+  const code=(await registered.json()).data.recoveryCode;assert.equal(code.length,64);
+  const stored=await db.prepare('SELECT p.*,u.email_verified_at FROM auth_passwords p JOIN app_users u ON u.id=p.user_id WHERE u.email=?').bind(address).first();
+  assert.notEqual(stored.password_hash,password);assert.notEqual(stored.recovery_hash,code);assert.equal(stored.email_verified_at,null);
+  assert.equal((await pwApi('login',{email:address.toUpperCase(),password})).status,200);
+  assert.equal((await pwApi('login',{email:address,password:'wrong password 123'})).status,401);
+  assert.equal((await pwApi('register',{email:address,password:'another password 123'})).status,409);
+  const oldCookie=registered.headers.get('set-cookie').split(';')[0];
+  assert.equal((await pwApi('reset',{email:address,password:'replacement password 123',recoveryCode:'f'.repeat(64)})).status,401);
+  const reset=await pwApi('reset',{email:address,password:'replacement password 123',recoveryCode:code});assert.equal(reset.status,200);
+  assert.notEqual((await reset.json()).data.recoveryCode,code);
+  assert.equal((await handleApi(request('me',{user:null,headers:{cookie:oldCookie}}),passwordEnv(),send)).status,401);
+  assert.equal((await pwApi('reset',{email:address,password:'other replacement 123',recoveryCode:code})).status,401);
+  assert.equal((await pwApi('login',{email:address,password})).status,401);
+  assert.equal((await pwApi('login',{email:address,password:'replacement password 123'})).status,200);
+});
+test('password validation, missing pepper, unknown accounts and disabled email links fail closed',async()=>{
+  assert.equal((await pwApi('register',{email:'weak@example.com',password:'short'})).status,400);
+  assert.equal((await pwApi('login',{email:'missing@example.com',password:'a long test password'})).status,401);
+  assert.equal((await handleApi(request('auth/password/register',{method:'POST',user:null,body:{email:'config@example.com',password:'a long test password'}}),{DB:db,APP_ORIGIN:origin},send)).status,503);
+  assert.equal((await handleApi(request('auth/request',{method:'POST',user:null,body:{email:'disabled@example.com'}}),passwordEnv(),send)).status,404);
 });

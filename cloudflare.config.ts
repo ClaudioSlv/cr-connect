@@ -17,8 +17,8 @@ export default defineConfig({
       DB: bindings.d1({ id: "a23f9414-4400-45d8-85e4-196e91781da7", name: "cr-connect" }),
       CR_BACKEND: bindings.text("d1"),
       APP_ORIGIN: bindings.secret(),
-      RESEND_API_KEY: bindings.secret(),
-      AUTH_EMAIL_FROM: bindings.secret(),
+      AUTH_METHOD: bindings.text("password"),
+      PASSWORD_PEPPER: bindings.secret(),
     },
   }),
 });

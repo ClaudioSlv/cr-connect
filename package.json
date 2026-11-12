@@ -12,7 +12,7 @@
     "build:vinext": "vite build",
     "start:vinext": "vite preview",
     "deploy:vinext": "vinext-cloudflare deploy",
-    "test:d1": "node --test tests/d1-api.test.mjs",
+    "test:d1": "node --test tests/d1-api.test.mjs tests/d1-commerce.test.mjs",
     "test:d1-preview": "node scripts/test-d1-preview.mjs",
     "test:d1-browser": "node scripts/test-d1-browser.mjs"
   },

@@ -1,8 +1,8 @@
 import { GState, jsPDF } from "jspdf";
 import { paymentMethodLabel, paymentTotals, type PaymentData } from "./payment-terms";
 
-type OrderPdf = { number: string; client: string; vehicle: string; status: string; note?: string | null; items: { description: string; quantity: number; unit_price: number; discount?: number }[]; payment?: PaymentData | null };
-export type OrderPdfAssets = { logo?: string; pixQr?: string; appQr?: string; checkoutUrl?: string; portalUrl?: string };
+type OrderPdf = { documentType?: "Orçamento" | "Ordem de Serviço"; number: string; client: string; vehicle: string; status: string; note?: string | null; items: { description: string; quantity: number; unit_price: number; discount?: number }[]; payment?: PaymentData | null };
+export type OrderPdfAssets = { simple?: boolean; logo?: string; pixQr?: string; appQr?: string; checkoutUrl?: string; portalUrl?: string };
 const gold = "#987018";
 const ink = "#262626";
 const grey = "#686868";
@@ -13,7 +13,7 @@ export function createOrderPdf(order: OrderPdf, assets: OrderPdfAssets = {}) {
   const pdf = new jsPDF();
   const left = 18, width = 174, bottom = 276;
   let y = 18;
-  pdf.setProperties({ title: `Ordem de Serviço ${order.number}`, author: "CR Reparador Automotivo", subject: "Serviços e condições para conferência do cliente" });
+  pdf.setProperties({ title: `${order.documentType || "Ordem de Serviço"} ${order.number}`, author: "CR Reparador Automotivo", subject: "Serviços e condições para conferência do cliente" });
   function font(size = 9, bold = false, color = ink) { pdf.setFont("helvetica", bold ? "bold" : "normal"); pdf.setFontSize(size); pdf.setTextColor(color); pdf.setCharSpace(0); }
   function page() {
     if (assets.logo) {
@@ -57,7 +57,7 @@ export function createOrderPdf(order: OrderPdf, assets: OrderPdfAssets = {}) {
   const brandX = assets.logo ? left + 23 : left;
   font(11, true); pdf.text("CR REPARADOR AUTOMOTIVO", brandX, y + 8);
   font(7, true, gold); pdf.text("CR CONNECT · GESTÃO AUTOMOTIVA", brandX, y + 13);
-  font(8, true, gold); pdf.text("ORDEM DE SERVIÇO", 192, y + 3, { align: "right" });
+  font(8, true, gold); pdf.text((order.documentType || "Ordem de Serviço").toUpperCase(), 192, y + 3, { align: "right" });
   font(17, true); pdf.text(order.number, 192, y + 11, { align: "right" });
   font(7, false, grey); pdf.text(`Emitido em ${new Date().toLocaleDateString("pt-BR", {timeZone:"America/Sao_Paulo"})}`, 192, y + 16, { align: "right" });
   pdf.setDrawColor("#d5ac45"); pdf.setLineWidth(.6); pdf.line(left, 42, 192, 42); y = 48;
@@ -121,9 +121,9 @@ export function createOrderPdf(order: OrderPdf, assets: OrderPdfAssets = {}) {
     if (link) pdf.link(left, y, width, height, {url:link});
     y += height + 4;
   }
-  if (!payment || ["not_defined", "pix", "combined"].includes(payment.payment_method)) promo("PAGAMENTO VIA PIX", discount > 0 ? `${payment?.pix_discount_percent}% de desconto no Pix` : "Valor combinado no Pix", `${discount > 0 ? `Antes do desconto: ${money(subtotal)}. Desconto: ${money(discount)}. ` : ""}Valor no QR Code: ${money(total)}. Chave Pix: 13991320205.`, assets.pixQr, "#28a886");
-  if (payment && ["credit_card", "debit_card", "combined"].includes(payment.payment_method)) promo("CR CONNECT + INFINITEPAY", assets.checkoutUrl ? "Abrir pagamento seguro com cartão" : "Pagamento com cartão", `Valor no cartão: ${money(total)}.${assets.checkoutUrl ? " Toque neste quadro para abrir o pagamento." : " Solicite o link de pagamento à oficina."}`, undefined, "#484848", assets.checkoutUrl);
-  promo("CR CONNECT · PORTAL DO CLIENTE", "CONFIRA SUA O.S. NO APP", "Acesse com seu cadastro para acompanhar o atendimento e aceitar as condições combinadas.", assets.appQr, "#d5ac45", assets.portalUrl);
+  if (!assets.simple && (!payment || ["not_defined", "pix", "combined"].includes(payment.payment_method))) promo("PAGAMENTO VIA PIX", discount > 0 ? `${payment?.pix_discount_percent}% de desconto no Pix` : "Valor combinado no Pix", `${discount > 0 ? `Antes do desconto: ${money(subtotal)}. Desconto: ${money(discount)}. ` : ""}Valor no QR Code: ${money(total)}. Chave Pix: 13991320205.`, assets.pixQr, "#28a886");
+  if (!assets.simple && payment && ["credit_card", "debit_card", "combined"].includes(payment.payment_method)) promo("CR CONNECT + INFINITEPAY", assets.checkoutUrl ? "Abrir pagamento seguro com cartão" : "Pagamento com cartão", `Valor no cartão: ${money(total)}.${assets.checkoutUrl ? " Toque neste quadro para abrir o pagamento." : " Solicite o link de pagamento à oficina."}`, undefined, "#484848", assets.checkoutUrl);
+  if (!assets.simple) promo("CR CONNECT · PORTAL DO CLIENTE", "CONFIRA SUA O.S. NO APP", "Acesse com seu cadastro para acompanhar o atendimento e aceitar as condições combinadas.", assets.appQr, "#d5ac45", assets.portalUrl);
   return pdf;
 }
 

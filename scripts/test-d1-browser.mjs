@@ -12,7 +12,7 @@ try{
   let ready=false;
   for(let i=0;i<120;i++){
     if(child.exitCode!==null)throw Error(logs.slice(-3000));
-    try{const r=await fetch(`${origin}/login`);if(r.ok){assert.match(await r.text(),/Receba um link seguro/);ready=true;break;}}catch{}
+    try{const r=await fetch(`${origin}/login`);if(r.ok){assert.match(await r.text(),/Entre com seu e-mail e sua senha/);ready=true;break;}}catch{}
     await new Promise(resolve=>setTimeout(resolve,250));
   }
   assert.ok(ready,logs.slice(-3000));
@@ -25,7 +25,7 @@ try{
     const result=await r.json();assert.ok(r.ok&&result.success,JSON.stringify(result));return result;
   }
   // A separate persistence directory is supplied by CR_BROWSER_TEST.
-  for(const name of ['0001_identity','0002_core']) await sql(await readFile(new URL(`../d1/migrations/${name}.sql`,import.meta.url),'utf8'));
+  for(const name of ['0001_identity','0002_core','0003_password_auth','0004_commerce']) await sql(await readFile(new URL(`../d1/migrations/${name}.sql`,import.meta.url),'utf8'));
   const raw=randomBytes(32).toString('hex'); const hash=createHash('sha256').update(raw).digest('hex');
   await sql(`INSERT INTO app_users(id,email) VALUES ('browser-test','browser@example.com');
     INSERT INTO profiles(id,full_name) VALUES ('browser-test','Teste local');
@@ -50,11 +50,47 @@ try{
   await page.getByText('Veículo e lembrete preventivo salvos com sucesso.').waitFor();
   await page.getByRole('button',{name:'Abrir lista de veículos'}).click();await page.getByText('Renault Fluence',{exact:true}).waitFor();
   await page.screenshot({path:'/tmp/cr-d1-mobile.png',fullPage:true});
+  await page.goto(`${origin}/app/precificacao`);
+  await page.getByPlaceholder('Novo serviço',{exact:true}).fill('Montagem do cabeçote');
+  await page.getByPlaceholder('Categoria',{exact:true}).fill('Motor');
+  await page.getByPlaceholder('Mínimo R$').fill('700');await page.getByPlaceholder('Máximo R$').fill('900');
+  await page.getByRole('button',{name:'Adicionar serviço',exact:true}).click();
+  await page.getByText('Montagem do cabeçote',{exact:true}).waitFor();
+  await page.goto(`${origin}/app/orcamentos`);
+  await page.getByRole('combobox').nth(0).selectOption({label:'Cliente do teste'});
+  await page.getByRole('combobox').nth(1).selectOption({label:'Renault Fluence'});
+  await page.getByRole('button',{name:'Criar orçamento',exact:true}).click();
+  await page.getByPlaceholder('Descreva o serviço, peça ou mão de obra').fill('Montagem do cabeçote');
+  await page.getByPlaceholder('Valor (R$)',{exact:true}).fill('700');
+  await page.getByRole('button',{name:'Adicionar',exact:true}).click();
+  await page.getByText('Item adicionado ao orçamento.',{exact:true}).waitFor();
+  await page.getByLabel('Forma de pagamento',{exact:true}).selectOption('cash');
+  await page.getByLabel('Condições e prazo combinados').fill('Pagamento na entrega do veículo.');
+  await page.getByRole('button',{name:'Salvar condições de pagamento',exact:true}).click();
+  await page.getByText('Condições salvas.',{exact:false}).waitFor();
+  const downloadPromise=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Gerar PDF com logo',exact:true}).click();
+  await (await downloadPromise).saveAs('/tmp/cr-commerce-budget.pdf');
+  await page.getByLabel('Confirmo que o cliente aceitou estas condições',{exact:false}).check();
+  await page.getByRole('button',{name:'Registrar aceite',exact:true}).click();
+  await page.getByText('Aceite registrado para estas condições e este valor.',{exact:true}).waitFor();
+  page.on('dialog',dialog=>dialog.accept());
+  await page.getByRole('button',{name:'Registrar aprovação do cliente',exact:true}).click();
+  await page.getByRole('button',{name:'Criar O.S. deste orçamento',exact:true}).click();
+  await page.getByRole('link',{name:'Abrir ordem de serviço',exact:true}).click();
+  await page.getByText('Montagem do cabeçote',{exact:true}).waitFor();
+  await page.screenshot({path:'/tmp/cr-commerce-order-mobile.png',fullPage:true});
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'mobile horizontal overflow');
   await page.getByRole('button',{name:'Sair',exact:true}).click();await page.waitForURL('**/login');
-  await page.getByLabel('E-mail',{exact:true}).fill('delivery-test@example.com');
-  await page.getByRole('button',{name:'Enviar link de acesso'}).click();await page.getByRole('alert').filter({hasText:'O e-mail não pôde ser enviado'}).waitFor();
+  await page.getByRole('button',{name:'Criar conta',exact:true}).click();
+  await page.getByLabel('E-mail',{exact:true}).fill('new-browser@example.com');
+  await page.getByLabel('Senha',{exact:true}).fill('local browser password 123');
+  await page.getByLabel('Confirme a senha',{exact:true}).fill('local browser password 123');
+  await page.getByRole('button',{name:'Criar conta',exact:true}).click();
+  await page.getByRole('heading',{name:'Guarde seu código de recuperação'}).waitFor();
+  assert.equal((await page.getByLabel('Código de recuperação',{exact:true}).inputValue()).length,64);
   assert.deepEqual(legacyRequests,[]);assert.deepEqual(errors,[]);
-  console.log('PASS: production Worker preview, mobile login, client and vehicle CRUD, logout, honest email failure, zero Supabase requests');
+  console.log('PASS: production Worker preview, mobile login, client and vehicle CRUD, logout, password registration and recovery code, budget, approval, O.S. conversion, logo PDF, zero Supabase requests');
 }finally{
   await browser?.close();try{process.kill(-child.pid,'SIGTERM');}catch{}
 }

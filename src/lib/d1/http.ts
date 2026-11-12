@@ -1,14 +1,22 @@
+import { commerceQuery, commerceRpc } from './commerce.ts';
+import { passwordAuth } from './password.ts';
 import { ApiError, createWorkshop, deleteRecord, jsonBody, listRecords, membership, requireOrigin, requireSameOrigin, requireUser, saveRecord, text, type Database } from './service.ts';
 import { consumeLogin, requestLogin, signOut, type LoginMail } from './auth.ts';
 
-export type ApiEnvironment = { DB: Database; APP_ORIGIN?: string };
+export type ApiEnvironment = { DB: Database; APP_ORIGIN?: string; AUTH_METHOD?: string; PASSWORD_PEPPER?: string };
 const commonHeaders = { 'Cache-Control':'private, no-store', 'Referrer-Policy':'no-referrer', 'X-Content-Type-Options':'nosniff' };
 export async function handleApi(request: Request, env: ApiEnvironment, send: LoginMail): Promise<Response> {
   try {
     const origin = requireOrigin(env.APP_ORIGIN,request);
     const url = new URL(request.url); const path = url.pathname.replace(/^\/api\/cr\//,'');
     if (request.method !== 'GET') requireSameOrigin(request,origin);
-    if (path === 'auth/request' && request.method === 'POST') {
+    const passwordRoute = /^auth\/password\/(register|login|reset)$/.exec(path);
+    if (passwordRoute && request.method === 'POST') {
+      const result=await passwordAuth(env.DB,request,origin,await jsonBody(request),passwordRoute[1] as 'register'|'login'|'reset',env.PASSWORD_PEPPER);
+      return Response.json({data:{recoveryCode:result.recoveryCode}},{status:passwordRoute[1]==='register'?201:200,headers:{...commonHeaders,'Set-Cookie':result.sessionCookie}});
+    }
+    if(env.AUTH_METHOD==='password' && ['auth/request','auth/confirm'].includes(path))throw new ApiError(404,'Use seu e-mail e sua senha para entrar.');
+    if (path === 'auth/request'  && request.method === 'POST') {
       const sessionCookie = await requestLogin(env.DB,request,origin,await jsonBody(request),send);
       return Response.json({ok:true},{headers:{...commonHeaders,'Set-Cookie':sessionCookie}});
     }
@@ -19,6 +27,8 @@ export async function handleApi(request: Request, env: ApiEnvironment, send: Log
     }
     if (path === 'auth/logout' && request.method === 'POST') return Response.json({ok:true},{headers:{...commonHeaders,'Set-Cookie':await signOut(env.DB,request,origin)}});
     const user = await requireUser(env.DB,request,origin);
+    if (path === 'commerce/query' && request.method === 'POST') return Response.json({data:await commerceQuery(env.DB,user.id,await jsonBody(request))},{headers:commonHeaders});
+    if (path === 'commerce/rpc' && request.method === 'POST') return Response.json({data:await commerceRpc(env.DB,user.id,await jsonBody(request))},{headers:commonHeaders});
     if (path === 'me' && request.method === 'GET') return Response.json({data:{user,membership:await membership(env.DB,user.id)}},{headers:commonHeaders});
     if (path === 'workshops' && request.method === 'POST') {
       // One initial office per account; membership creation is never client supplied.
@@ -40,6 +50,7 @@ export async function handleApi(request: Request, env: ApiEnvironment, send: Log
   } catch (error) {
     if (error instanceof ApiError) return Response.json({error:{message:error.message,code:error.code}},{status:error.status,headers:commonHeaders});
     const message = error instanceof Error ? error.message : '';
+    if (message.includes('CHECK constraint failed') || message.includes('NOT NULL constraint failed')) return Response.json({error:{message:'Confira os campos obrigatórios, quantidades e valores.'}},{status:400,headers:commonHeaders});
     if (message.includes('UNIQUE constraint failed')) return Response.json({error:{message:'Já existe um cadastro com este documento ou placa.',code:'23505'}},{status:409,headers:commonHeaders});
     if (message.includes('FOREIGN KEY constraint failed')) return Response.json({error:{message:'Verifique o cliente selecionado e os cadastros vinculados antes de continuar.'}},{status:409,headers:commonHeaders});
     console.error(JSON.stringify({event:'cr_api_failure',type:error instanceof Error?error.name:'unknown'}));

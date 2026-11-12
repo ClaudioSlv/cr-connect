@@ -1,3 +1,5 @@
+import { d1Enabled } from "@/lib/d1/platform";
+import { D1CommercePage } from "@/components/d1-commerce-page";
 import { AppShell } from "@/components/app-shell";
 import { BudgetsManager } from "@/components/budgets-manager";
 import { LaborPricingManager } from "@/components/labor-pricing-manager";
@@ -5,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 export default async function BudgetsPage() {
+  if (d1Enabled()) return <D1CommercePage kind="budgets"/>;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const { data } = await supabase

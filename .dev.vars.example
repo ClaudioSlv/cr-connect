@@ -1,5 +1,3 @@
 # Local Worker preview only. Copy this file to .dev.vars (never commit real values).
 APP_ORIGIN="http://127.0.0.1:3190"
-# Required for real email delivery; leave unset for the local failure-state tests.
-# RESEND_API_KEY="replace-with-a-scoped-sending-key"
-# AUTH_EMAIL_FROM="CR CONNECT <acesso@example.com>"
+PASSWORD_PEPPER="local-preview-test-pepper-not-for-production-1234"
