@@ -95,7 +95,7 @@ export function createOrderPdf(order: OrderPdf, assets: OrderPdfAssets = {}) {
       y += Math.max(10, chunk.length * 4.5 + 5); pdf.setDrawColor("#dddddd"); pdf.setLineWidth(.2); pdf.line(left, y - 2, 192, y - 2);
     }
   }
-  const subtotal = order.items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price) - Number(item.discount || 0), 0);
+  const subtotal = order.items.reduce((sum, item) => sum + (Math.round(Number(item.quantity) * Number(item.unit_price) * 100) - Math.round(Number(item.discount || 0) * 100)) / 100, 0);
   const payment = order.payment;
   const { surcharge, total, discount } = paymentTotals(subtotal, payment?.surcharge_percent || 0, payment?.pix_discount_percent || 0);
   ensure(14); font(13, true, gold); pdf.text(`Total: ${money(total)}`, 192, y + 7, {align:"right"}); y += 14;

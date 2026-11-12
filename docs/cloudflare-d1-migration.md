@@ -49,7 +49,9 @@ CR_BROWSER_TEST=/tmp/cr-connect-clean-preview npm run test:d1-preview
 The 23 API tests cover auth/session security, office/role isolation, money and
 payment acceptance, duplicate conversion and labor adjustments. The compiled
 Worker HTTP preview covers protected pages, customer/vehicle CRUD, the complete
-budget-to-order API flow, registration, login and recovery. PDF samples were
+budget-to-order API flow, registration, login and recovery. The published Worker also passed an isolated temporary-office test of protected
+pages, client/vehicle creation, budgets, payment acceptance, repeat-safe conversion
+and labor catalog creation; all temporary records were removed. PDF samples were
 rendered and inspected with the existing CR logo. Playwright click-through checks
 are prepared but browser startup is blocked by the environment's Unix-socket
 restrictions; visual/click-through verification has not passed here.

@@ -10,7 +10,7 @@ type Product = { id: string; description: string; quantity: number; sale_price: 
 export function OrderItemsPanel({ workshopId, orderId, onItemsChange, surchargePercent = 0, pixDiscountPercent = 0 }: { workshopId: string; orderId: string; status: string; surchargePercent?: number; pixDiscountPercent?: number; onItemsChange?: (items: Item[]) => void }) {
   const db = createClient();
   const [items, setItems] = useState<Item[]>([]); const [products, setProducts] = useState<Product[]>([]); const [kind, setKind] = useState("service"); const [description, setDescription] = useState(""); const [productId, setProductId] = useState(""); const [quantity, setQuantity] = useState("1"); const [price, setPrice] = useState("0"); const [message, setMessage] = useState("");
-  const total = useMemo(() => items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price) - Number(item.discount), 0), [items]);
+  const total = useMemo(() => items.reduce((sum, item) => sum + (Math.round(Number(item.quantity) * Number(item.unit_price) * 100) - Math.round(Number(item.discount) * 100)) / 100, 0), [items]);
   const totals = paymentTotals(total, surchargePercent, pixDiscountPercent);
   const money = (value: number) => value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 

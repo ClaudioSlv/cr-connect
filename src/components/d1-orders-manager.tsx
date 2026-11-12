@@ -16,7 +16,7 @@ export function D1OrdersManager({workshopId}:{workshopId:string}){
  const [clients,setClients]=useState<Client[]>([]),[vehicles,setVehicles]=useState<Vehicle[]>([]),[orders,setOrders]=useState<Order[]>([]);
  const [selected,setSelected]=useState<Order|null>(null),[form,setForm]=useState(empty),[items,setItems]=useState<Item[]>([]),[payment,setPayment]=useState<PaymentData|null>(null),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
  const db=createClient();
- const subtotal=items.reduce((sum,i)=>sum+i.quantity*i.unit_price-i.discount,0);
+ const subtotal=items.reduce((sum,i)=>sum+(Math.round(i.quantity*i.unit_price*100)-Math.round(i.discount*100))/100,0);
  function choose(order:Order){setSelected(order);setForm({client_id:order.client_id,vehicle_id:order.vehicle_id,status:order.status,customer_complaint:order.customer_complaint,diagnosis:order.diagnosis||'',notes:order.notes||''});if(selected?.id!==order.id){setItems([]);setPayment(null);}setMessage('');}
  async function load(){const [c,v,o]=await Promise.all([db.from('clients').select().eq('workshop_id',workshopId),db.from('vehicles').select().eq('workshop_id',workshopId),db.from('service_orders').select().eq('workshop_id',workshopId).order('opened_at',{ascending:false})]);if(c.error||v.error||o.error)setMessage(c.error?.message||v.error?.message||o.error?.message||'Não foi possível carregar.');setClients(c.data||[]);setVehicles(v.data||[]);setOrders(o.data||[]);return (o.data||[]) as Order[];}
  // Load external office state when its scope opens.
