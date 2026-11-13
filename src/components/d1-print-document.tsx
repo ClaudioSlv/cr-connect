@@ -1,6 +1,7 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
-import type {PaymentData} from '@/lib/payment-terms';
+import {createPixPayload} from '@/lib/pix';
+import {paymentTotals,type PaymentData} from '@/lib/payment-terms';
 type Props={type:'Orçamento'|'Ordem de Serviço';number:string;client:string;vehicle:string;status:string;items:{description:string;quantity:number;unit_price:number;discount?:number}[];note?:string|null;payment?:PaymentData|null;disabled?:boolean;orderId?:string;phone?:string};
 export function PrintDocument(props:Props){
  const [busy,setBusy]=useState(false),[generated,setGenerated]=useState({key:'',url:''}),[message,setMessage]=useState('');const file=useRef<File|null>(null);
@@ -11,7 +12,15 @@ export function PrintDocument(props:Props){
  async function generate(){if(busy||props.disabled)return;setBusy(true);setMessage('');try{
   const {createOrderPdf,finishOrderPdf,loadPdfImage}=await import('@/lib/order-pdf');
   const logo=await loadPdfImage(`${window.location.origin}/brand/cr-reparador.jpg`);
-  const pdf=createOrderPdf({...props,documentType:props.type},{logo:logo.data,simple:true});finishOrderPdf(pdf);
+  const assets:import('@/lib/order-pdf').OrderPdfAssets={logo:logo.data,simple:true};
+  if(props.payment?.payment_method==='pix'){
+   const subtotal=props.items.reduce((sum,item)=>sum+(Math.round(Number(item.quantity)*Number(item.unit_price)*100)-Math.round(Number(item.discount||0)*100))/100,0);
+   const total=paymentTotals(subtotal,props.payment.surcharge_percent,props.payment.pix_discount_percent||0).total;
+   if(total<=0)throw new Error('Valor Pix inválido.');
+   const QRCode=await import('qrcode');
+   assets.pixQr=await QRCode.toDataURL(createPixPayload(total,props.number),{width:280,margin:2});
+  }
+  const pdf=createOrderPdf({...props,documentType:props.type},assets);finishOrderPdf(pdf);
   const blob=pdf.output('blob');file.current=new File([blob],filename,{type:'application/pdf'});const next=URL.createObjectURL(blob);setGenerated({key:documentKey,url:next});
   const a=document.createElement('a');a.href=next;a.download=filename;document.body.appendChild(a);a.click();a.remove();setMessage('PDF com a logo pronto. Baixe ou compartilhe com o cliente.');
  }catch{setMessage('Não foi possível gerar o PDF com a logo. Tente novamente.');}finally{setBusy(false);}}

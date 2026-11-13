@@ -1,6 +1,6 @@
 # CR Connect on Cloudflare D1
 
-## Current milestone — 2026-11-12
+## Current milestone — 2026-11-13
 
 Published application: https://cr-connect.claudio1748.workers.dev
 Source branch: `migration/cloudflare-d1`; legacy default branch unchanged.
@@ -16,6 +16,10 @@ Available in D1 mode:
   the customer's acceptance and approval. Approved budgets convert to numbered
   service orders once, copying items and payment conditions.
 - Service orders with diagnosis, notes, status and item editing.
+- Direct Pix QR restored in D1 PDFs when the saved payment method is Pix, using
+  the original CR recipient and final document total. No bank request is made;
+  the office checks receipt manually. This does not restore deleted Pix discount
+  settings or change any saved discount percentage.
 - Logo PDF download for budgets and orders. Native file sharing when supported;
   otherwise WhatsApp opens with instructions to attach the downloaded PDF.
 - Server-side membership/role checks, office-scoped foreign keys, validated money,
@@ -41,6 +45,7 @@ Migrations `0001_identity` through `0004_commerce` are applied remotely. Check
 npm ci
 npm run typecheck
 npm run test:d1
+node --test tests/pix-pdf.test.mjs
 npm run build:vinext
 # Set the local APP_ORIGIN and a local PASSWORD_PEPPER in ignored .dev.vars first.
 CR_BROWSER_TEST=/tmp/cr-connect-clean-preview npm run test:d1-preview
